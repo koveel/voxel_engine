@@ -37,6 +37,9 @@ namespace Engine {
 		Window* window = static_cast<Window*>(glfwGetWindowUserPointer(handle));
 		App& app = App::get();
 
+		if (key == -1)
+			return;
+
 		// Press
 		if (action == 1)
 		{
@@ -65,13 +68,13 @@ namespace Engine {
 		// Press / repeat
 		if (action == 1 || action == 2)
 		{
-			MouseButtonPressEvent e{ (MouseButton)button, window };
+			MouseButtonPressEvent e{ (Key)button, window };
 			app.handle_event(e);
 		}
 		// Release
 		else if (action == 0)
 		{
-			MouseButtonReleaseEvent e{ (MouseButton)button, window };
+			MouseButtonReleaseEvent e{ (Key)button, window };
 			app.handle_event(e);
 		}
 	}

@@ -195,7 +195,7 @@ namespace Engine {
 					SceneRenderer::generate_shadow_map(ENTITIES_TO_RENDER);
 					b = false;
 				}
-				b = Input::was_button_pressed(MouseButton::Left);
+				b = Input::was_key_pressed(Key::LeftMouse);
 
 				// GEOMETRY PASS
 				pipeline.submit_pass(geometryPass, [&]()
@@ -383,15 +383,15 @@ namespace Engine {
 	}
 	void App::on_mouse_button_press(MouseButtonPressEvent& e)
 	{
-		bool first = Input::s_ButtonsDown[(uint32_t)e.button] == 0;
-		Input::s_ButtonsDown[(uint32_t)e.button] = 1;
+		bool first = Input::s_KeysDown[(uint32_t)e.button] == 0;
+		Input::s_KeysDown[(uint32_t)e.button] = 1;
 		if (first)
-			Input::s_ButtonsPressed[(uint32_t)e.button] = 1;
+			Input::s_KeysPressed[(uint32_t)e.button] = 1;
 	}
 	void App::on_mouse_button_release(MouseButtonReleaseEvent& e)
 	{
-		Input::s_ButtonsDown[(uint32_t)e.button] = 0;
-		Input::s_ButtonsReleased[(uint32_t)e.button] = 1;
+		Input::s_KeysDown[(uint32_t)e.button] = 0;
+		Input::s_KeysReleased[(uint32_t)e.button] = 1;
 	}
 	void App::on_mouse_move(MouseMoveEvent& e)
 	{

@@ -23,7 +23,7 @@ namespace Engine {
 		if (Input::was_key_pressed(Key::Escape)) {
 			Input::set_cursor_mode(CursorMode::Default);
 		}
-		else if (Input::was_button_pressed(MouseButton::Left)) {
+		else if (Input::was_key_pressed(Key::LeftMouse)) {
 			Input::set_cursor_mode(CursorMode::Locked);
 		}
 		if (Input::get_cursor_mode() == CursorMode::Default)
@@ -50,7 +50,7 @@ namespace Engine {
 			m_TargetPosition += right * moveSpeed;
 		if (Input::is_key_down(Key::Space))
 			m_TargetPosition.y += moveSpeed;
-		if (Input::is_key_down(Key::Shift))
+		if (Input::is_key_down(Key::LShift))
 			m_TargetPosition.y -= moveSpeed;
 	}
 

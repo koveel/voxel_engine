@@ -9,7 +9,6 @@
 namespace Engine {
 
 	std::bitset<(uint32_t)Key::COUNT> Input::s_KeysDown, Input::s_KeysPressed, Input::s_KeysReleased;
-	std::bitset<(uint32_t)MouseButton::COUNT> Input::s_ButtonsDown, Input::s_ButtonsPressed, Input::s_ButtonsReleased;
 	float Input::s_MouseX = 0.0f, Input::s_MouseY = 0.0f;
 	float Input::s_MouseDeltaX = 0.0f, Input::s_MouseDeltaY = 0.0f;
 
@@ -26,21 +25,6 @@ namespace Engine {
 	bool Input::was_key_released(Key key)
 	{
 		return s_KeysReleased[(uint32_t)key];
-	}
-
-	bool Input::is_button_down(MouseButton button)
-	{
-		return s_ButtonsDown[(uint32_t)button];
-	}
-
-	bool Input::was_button_pressed(MouseButton button)
-	{
-		return s_ButtonsPressed[(uint32_t)button];
-	}
-
-	bool Input::was_button_released(MouseButton button)
-	{
-		return s_ButtonsReleased[(uint32_t)button];
 	}
 
 	CursorMode Input::get_cursor_mode()
@@ -69,16 +53,10 @@ namespace Engine {
 	void Input::clear_state(bool fully)
 	{
 		if (fully)
-		{
 			s_KeysDown.reset();
-			s_ButtonsDown.reset();
-		}
 
 		s_KeysPressed.reset();
 		s_KeysReleased.reset();
-
-		s_ButtonsPressed.reset();
-		s_ButtonsReleased.reset();
 	}
 
 }

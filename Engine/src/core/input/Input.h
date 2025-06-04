@@ -11,10 +11,6 @@ namespace Engine {
 		static bool was_key_pressed(Key key);
 		static bool was_key_released(Key key);
 
-		static bool is_button_down(MouseButton button);
-		static bool was_button_pressed(MouseButton button);
-		static bool was_button_released(MouseButton button);
-
 		static float get_mouse_x() { return s_MouseX; }
 		static float get_mouse_y() { return s_MouseY; }
 
@@ -31,7 +27,6 @@ namespace Engine {
 		static float s_MouseDeltaX, s_MouseDeltaY;
 
 		static std::bitset<(uint32_t)Key::COUNT> s_KeysDown, s_KeysPressed, s_KeysReleased;
-		static std::bitset<(uint32_t)MouseButton::COUNT> s_ButtonsDown, s_ButtonsPressed, s_ButtonsReleased;
 
 		friend class App;
 		friend class Window;

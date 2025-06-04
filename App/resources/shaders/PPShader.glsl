@@ -28,12 +28,9 @@ layout(binding = 5) uniform sampler2D u_BlueNoiseTexture;
 uniform int u_FrameNumber;
 const float GoldenRatio = 1.61803398875f;
 
-float GetBlueNoise(vec2 uv)
+float GetBlueNoise(vec2 uvseed)
 {
-	// 1077, 477
-	// 2154, 954
-
-	vec2 coord = uv / vec2(512, 512);
+	vec2 coord = uvseed / vec2(512, 512);
 	float sampl = texture(u_BlueNoiseTexture, coord).a;
 	return mod(sampl + GoldenRatio * (u_FrameNumber % 100), 1.0f);
 }
@@ -161,7 +158,6 @@ void main()
 	for (int i = 0; i < AmbientOcclusionRaysPerPixel; i++)
 	{
 		vec3 origin = worldSpaceFragment;
-		//vec3 direction = RandomDirectionOnHemisphere(mod(gl_FragCoord.xy, vec2(512, 512)) * (i + 1), normal);
 		vec3 direction = RandomDirectionOnHemisphere(gl_FragCoord.xy * (i + 1), normal);
 
 		float t;
@@ -170,7 +166,7 @@ void main()
 	}
 	average_t /= AmbientOcclusionRaysPerPixel;
 	
-	const float AmbientContribution = 0.9f;
+	const float AmbientContribution = 1.0f;
 
 	float linear_t = average_t / AmbientOcclusionRaysMaxDistanceMeters;
 	vec4 ambient = vec4(vec3(1.0f - AmbientContribution), 1.0f);

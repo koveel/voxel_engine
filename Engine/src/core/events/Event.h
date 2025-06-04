@@ -56,7 +56,7 @@ namespace Engine {
 		Window* window = nullptr;
 		bool repeat = false;
 		char character;
-		Key key; // May just be 0, no guarantee tbh cause this code is ass
+		Key key;
 
 		EVENT_BODY(KeyType)
 
@@ -69,11 +69,11 @@ namespace Engine {
 	struct MouseButtonPressEvent : public Event
 	{
 		Window* window = nullptr;
-		MouseButton button;
+		Key button;
 
 		EVENT_BODY(MouseButtonPress)
 
-		MouseButtonPressEvent(MouseButton button, Window* window)
+		MouseButtonPressEvent(Key button, Window* window)
 			: button(button), window(window)
 		{
 		}
@@ -82,11 +82,11 @@ namespace Engine {
 	struct MouseButtonReleaseEvent : public Event
 	{
 		Window* window = nullptr;
-		MouseButton button;
+		Key button;
 
 		EVENT_BODY(MouseButtonRelease)
 
-		MouseButtonReleaseEvent(MouseButton button, Window* window)
+		MouseButtonReleaseEvent(Key button, Window* window)
 			: button(button), window(window)
 		{
 		}

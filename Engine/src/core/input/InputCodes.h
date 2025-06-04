@@ -9,17 +9,12 @@ namespace Engine {
 		Locked = 0x00034003, // hidden, locked
 	};
 
-	enum class MouseButton
-	{
-		Left = 0,
-		Right = 1,
-		Middle = 2,
-
-		COUNT,
-	};
-
 	enum class Key
 	{
+		LeftMouse = 0,
+		RightMouse = 1,
+		MiddleMouse = 2,
+
 		Space = 32u,
 		Apostrophe = 39u,
 		Comma = 44u,
@@ -139,10 +134,11 @@ namespace Engine {
 		KP_Enter = 335u,
 		KP_Equal = 336u,
 
-		Shift = 340u,
+		LShift = 340u,
 		Control = 341u,
 		Alt = 342u,
 		Menu = 348u,
+		RShift = 344u,
 
 		COUNT,
 	};
