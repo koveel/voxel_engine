@@ -1,0 +1,18 @@
+// Depth texture always bound to sampler slot 0
+layout(binding = 0) uniform sampler2D u_DepthTexture;
+
+uniform mat4 u_InverseView;
+uniform mat4 u_InverseProjection;
+
+vec3 ReconstructWorldSpaceFromDepth(vec2 uv)
+{
+	float depth = texture(u_DepthTexture, uv).r;
+
+	float z = depth * 2.0f - 1.0f;
+	vec4 ndcPosition = vec4(uv * 2.0f - 1.0f, z, 1.0f);  // x, y in [-1, 1], z in [-1, 1]
+	vec4 cameraSpacePosition = u_InverseProjection * ndcPosition;
+	cameraSpacePosition /= cameraSpacePosition.w;
+
+	vec4 worldPos = u_InverseView * cameraSpacePosition;
+	return worldPos.xyz / worldPos.w;
+}
