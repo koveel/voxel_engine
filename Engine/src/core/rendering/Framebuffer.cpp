@@ -3,6 +3,7 @@
 #include "Framebuffer.h"
 
 #include <glad/glad.h>
+#include "Graphics.h"
 
 namespace Engine {
 
@@ -17,8 +18,15 @@ namespace Engine {
 		{
 			std::unique_ptr<Texture2D> texture = Texture2D::create(attachment.Width, attachment.Height, attachment.Format);
 
-			glNamedFramebufferTexture(m_ID, GL_COLOR_ATTACHMENT0 + attachmentIndex++, texture->get_handle(), 0);
+			uint32_t glAttachment = GL_COLOR_ATTACHMENT0 + attachmentIndex;
+			glNamedFramebufferTexture(m_ID, glAttachment, texture->get_handle(), 0);
 			m_ColorAttachments.push_back(std::move(texture));
+
+			m_DrawBuffers[m_DrawBuffersCount++] = glAttachment;
+			if (attachment.Clear)
+				m_ClearBuffers[m_ClearBuffersCount++] = glAttachment;
+
+			attachmentIndex++;
 		}
 		if (auto pDepthStencil = descriptor.pDepthStencilAttachment)
 		{
@@ -41,12 +49,7 @@ namespace Engine {
 			m_DepthStencilAttachment = std::move(texture);
 		}
 
-		std::vector<GLenum> targets(m_ColorAttachments.size());
-		for (uint32_t i = 0; i < m_ColorAttachments.size(); i++)
-			targets[i] = GL_COLOR_ATTACHMENT0 + i;
-
-		glNamedFramebufferDrawBuffers(m_ID, targets.size(), targets.data());
-
+		glNamedFramebufferDrawBuffers(m_ID, m_DrawBuffersCount, m_DrawBuffers);
 		ASSERT(glCheckNamedFramebufferStatus(m_ID, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 	}
 
@@ -55,18 +58,18 @@ namespace Engine {
 		glDeleteFramebuffers(1, &m_ID);
 	}
 
-	void Framebuffer::bind(int state)
+	void Framebuffer::bind()
 	{
-		std::vector<GLenum> targets(m_ColorAttachments.size());
-		for (uint32_t i = 0; i < m_ColorAttachments.size(); i++)
-			targets[i] = GL_COLOR_ATTACHMENT0 + i;
-
-		glNamedFramebufferDrawBuffers(m_ID, targets.size(), targets.data());
-		glBindFramebuffer(state == -1 ? GL_FRAMEBUFFER : (state == 0 ? GL_READ_FRAMEBUFFER : GL_DRAW_FRAMEBUFFER), m_ID);
+		glNamedFramebufferDrawBuffers(m_ID, m_DrawBuffersCount, m_DrawBuffers);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_ID);
 	}
 
 	void Framebuffer::clear(const Color& color)
 	{
+		bind();
+		glNamedFramebufferDrawBuffers(m_ID, m_ClearBuffersCount, m_ClearBuffers);
+		Graphics::clear(color);
+		glNamedFramebufferDrawBuffers(m_ID, m_DrawBuffersCount, m_DrawBuffers);
 	}
 
 	void Framebuffer::resize(uint32_t width, uint32_t height)

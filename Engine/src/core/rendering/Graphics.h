@@ -40,6 +40,7 @@ namespace Engine {
 		static void init();
 
 		static void clear(const Color& color, float depth = 1.0f);
+		static void clear(float r, uint32_t* bufs, size_t n);
 		static void draw_indexed(uint32_t count);
 
 		static void set_color_mask(uint32_t buf, bool r, bool g, bool b, bool a);

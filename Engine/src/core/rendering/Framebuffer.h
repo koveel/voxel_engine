@@ -10,6 +10,7 @@ namespace Engine {
 		{
 			uint32_t Width = 0, Height = 0;
 			TextureFormat Format = TextureFormat::RGBA8;
+			bool Clear = true;
 		};
 		struct DepthStencilAttachment
 		{
@@ -29,14 +30,22 @@ namespace Engine {
 	public:
 		~Framebuffer();
 
-		void bind(int state = -1);
+		void bind();
 		void clear(const Color& color);
 		void resize(uint32_t width, uint32_t height);
+
+		uint32_t get_handle() const { return m_ID; }
 
 		static std::unique_ptr<Framebuffer> create(const FramebufferDescriptor& descriptor);
 	private:
 		uint32_t m_ID = 0;
 	public:
+		uint32_t m_DrawBuffers[8]{};
+		uint32_t m_DrawBuffersCount = 0;
+
+		uint32_t m_ClearBuffers[8]{};
+		uint32_t m_ClearBuffersCount = 0;
+
 		std::vector<std::unique_ptr<Texture2D>> m_ColorAttachments;
 		std::unique_ptr<Texture2D> m_DepthStencilAttachment;
 	};

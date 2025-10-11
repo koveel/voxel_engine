@@ -11,138 +11,79 @@ void main()
 #type fragment
 #version 450 core
 
-layout(location = 0) out vec4 color;
+layout(location = 3) out float o_AOAccum;
 
 uniform vec2 u_ViewportDims;
 
 in vec2 o_UV;
 
+layout(binding = 2) uniform sampler2D u_PreviousDepth;
+layout(binding = 3) uniform sampler2D u_Albedo;
+layout(binding = 4) uniform sampler2D u_Normal;
+layout(binding = 5) uniform sampler2D u_PreviousNormal;
+layout(binding = 6) uniform sampler2D u_AmbientAccumulation;
+layout(binding = 7) uniform sampler2D u_Lighting;
+
 #include "raytracing.glinc"
-layout(binding = 1) uniform sampler2D u_Albedo;
-layout(binding = 2) uniform sampler2D u_Normal;
-layout(binding = 3) uniform sampler2D u_Lighting;
 
-layout(binding = 4) uniform sampler3D u_ShadowMap;
-layout(binding = 5) uniform sampler2D u_BlueNoiseTexture;
+uniform mat4 u_ViewProjection;
+uniform mat4 u_PrevFrameViewProjection;
 
-uniform int u_FrameNumber;
-const float GoldenRatio = 1.61803398875f;
-
-float GetBlueNoise(vec2 uvseed)
+const int AmbientOcclusionRaysMaxDistanceMeters = 24;
+float CastAmbientOcclusionRay(vec3 origin, vec3 direction)
 {
-	vec2 coord = uvseed / vec2(512, 512);
-	float sampl = texture(u_BlueNoiseTexture, coord).a;
-	return mod(sampl + GoldenRatio * (u_FrameNumber % 100), 1.0f);
-}
+	vec3 rayOrigin = origin;
+	float totalTraveled = 0.0f;
+	float t;
 
-const float M_PI = 3.14159265358f;
-vec3 RandomDirectionOnHemisphere(vec2 uv, vec3 normal)
-{
-	float r0 = GetBlueNoise(uv);
-	float r1 = GetBlueNoise(uv * r0);
-
-	float theta = 2.0f * M_PI * r0;
-	float phi = acos(1.0f - 2.0f * r1);
-	float x = sin(phi * cos(theta));
-	float y = sin(phi * sin(theta));
-	float z = cos(phi);
-
-	vec3 point = normalize(vec3(x, y, z));
-	vec3 ps = sign(point);
-	vec3 ns = sign(normal);
-
-	// Make direction match normal direction
-	point.x *= ps.x != ns.x ? -1.0f : 1.0f;
-	point.y *= ps.y != ns.y ? -1.0f : 1.0f;
-	point.z *= ps.z != ns.z ? -1.0f : 1.0f;
-
-	return point;
-}
-
-const float VoxelScale = 0.1f;
-const vec3 ShadowMapDimensions = ivec3(250);
-
-const int AmbientOcclusionRaysPerPixel = 2;
-const int AmbientOcclusionRaysMaxDistanceMeters = 32;
-
-bool RaycastShadowMap(vec3 origin, vec3 direction, out float t)
-{
-	// Bounds (shadow map always centered around origin)
-	vec3 worldspaceExtents = (ShadowMapDimensions * VoxelScale) / 2.0f;
-	vec3 p0 = -worldspaceExtents, p1 = worldspaceExtents;
-
-	const vec3 voxelsPerUnit = 1.0f / vec3(VoxelScale);
-
-	origin += direction * VoxelScale;
-	vec3 entry = ((origin) - p0) * voxelsPerUnit;
-
-	vec3 step = sign(direction);
-	vec3 delta = abs(1.0f / direction);
-
-	vec3 pos = clamp(floor(entry), vec3(0.0f, 0.0f, 0.0f), ShadowMapDimensions);
-	vec3 tMax = (pos - entry + max(step, 0)) / direction;
-
-	int axis = 0; // x, y, z
-	for (int i = 0; i < AmbientOcclusionRaysMaxDistanceMeters * 10; i++)
-	{
-		ivec3 voxelPos = ivec3(pos);
-		float sampl = texelFetch(u_ShadowMap, voxelPos, 0).r;
-		if (sampl != 0.0f) // hit something?
-		{
-			t = (tMax[axis] - delta[axis]) / voxelsPerUnit[axis];
-			return true;
-		}
-
-		if (tMax.x < tMax.y)
-		{
-			if (tMax.x < tMax.z)
-			{
-				pos.x += step.x;
-				if (pos.x < 0 || pos.x >= ShadowMapDimensions.x)
-					break;
-				t = tMax.x;
-				tMax.x += delta.x;
-				axis = 0;
-			}
-			else
-			{
-				pos.z += step.z;
-				if (pos.z < 0 || pos.z >= ShadowMapDimensions.z)
-					break;
-				t = tMax.z;
-				tMax.z += delta.z;
-				axis = 2;
-			}
-		}
-		else
-		{
-			if (tMax.y < tMax.z)
-			{
-				pos.y += step.y;
-				if (pos.y < 0 || pos.y >= ShadowMapDimensions.y)
-					break;
-				t = tMax.y;
-				tMax.y += delta.y;
-				axis = 1;
-			}
-			else
-			{
-				pos.z += step.z;
-				if (pos.z < 0 || pos.z >= ShadowMapDimensions.z)
-					break;
-				t = tMax.z;
-				tMax.z += delta.z;
-				axis = 2;
-			}
+	for (int lod = 0; lod < 3; lod++) {
+		rayOrigin = origin + direction * ((totalTraveled + float(lod == 0)) * 1.01f * g_ShadowLODScales[lod]); // brless first mip offset
+	
+		bool hit = RaycastShadowMapVariableFidelity(rayOrigin, direction, t, g_ShadowLODScales[lod], g_ShadowLODDistances[lod], lod);
+		totalTraveled += t;
+	
+		if (hit) {
+			return clamp(totalTraveled / 24.0, 0.0, 1.0);
 		}
 	}
-
-	// No hit
-	t = AmbientOcclusionRaysMaxDistanceMeters;
-	return false;
+	
+	return 1.0f; // no hit br
 }
 
-uniform int u_Output;
+vec2 GetLastFrameUVFromThisFrameWorldPos(vec3 worldPos)
+{
+	vec4 prevClip = u_PrevFrameViewProjection * vec4(worldPos, 1.0f);
+	if (prevClip.w <= 0.0f)
+		return vec2(-1.0f);
+	vec2 prevNdc = prevClip.xy / prevClip.w;
+	return prevNdc * 0.5f + 0.5f; // -1,1 -> 0, 1
+}
+
+float LinearizeDepth(float depth)
+{
+	const float near = 0.1f, far = 100.0f;
+	float z = depth * 2.0 - 1.0;
+	return (2.0 * near * far) / (far + near - z * (far - near));
+}
+
+vec2 GetScreenSpaceMotionVector(vec3 worldPos)
+{
+	vec4 currClip = u_ViewProjection * vec4(worldPos, 1.0);
+	currClip /= currClip.w;
+	vec2 currUV = currClip.xy * 0.5 + 0.5;
+
+	vec4 prevClip = u_PrevFrameViewProjection * vec4(worldPos, 1.0);
+	prevClip /= prevClip.w;
+	vec2 prevUV = prevClip.xy * 0.5 + 0.5;
+
+	vec2 motion = currUV - prevUV;
+
+	if (any(isnan(motion)) || any(greaterThan(abs(motion), vec2(1.0))))
+		motion = vec2(0.0);
+
+	return motion;
+}
+
 void main()
 {
 	vec2 uv = gl_FragCoord.xy / u_ViewportDims;
@@ -153,37 +94,68 @@ void main()
 	vec4 albedo = texture(u_Albedo, uv);
 	vec3 normal = texture(u_Normal, uv).xyz;
 	vec3 worldSpaceFragment = ReconstructWorldSpaceFromDepth(uv);
-
-	float average_t = 0.0f;
+	
+	float this_frame_ao = 0.0f;
+	const int AmbientOcclusionRaysPerPixel = 2;
 	for (int i = 0; i < AmbientOcclusionRaysPerPixel; i++)
 	{
-		vec3 origin = worldSpaceFragment;
-		vec3 direction = RandomDirectionOnHemisphere(gl_FragCoord.xy * (i + 1), normal);
-
-		float t;
-		RaycastShadowMap(origin, direction, t);
-		average_t += t;
+		vec3 direction = RandomDirectionOnHemisphere(normal, ivec2(gl_FragCoord), u_FrameNumber, i);
+		float norm = CastAmbientOcclusionRay(worldSpaceFragment, direction);
+		
+		this_frame_ao += norm;
 	}
-	average_t /= AmbientOcclusionRaysPerPixel;
-	
-	const float AmbientContribution = 1.0f;
+	this_frame_ao /= AmbientOcclusionRaysPerPixel;
 
-	float linear_t = average_t / AmbientOcclusionRaysMaxDistanceMeters;
-	vec4 ambient = vec4(vec3(1.0f - AmbientContribution), 1.0f);
-	vec4 ao_time = vec4(linear_t, linear_t, linear_t, 0.0f) * AmbientContribution;
-
-	vec4 result = albedo * (ambient + ao_time);
-	result = 1.0f - exp(-result);
-
-	switch (u_Output)
+	vec2 previousUV = GetLastFrameUVFromThisFrameWorldPos(worldSpaceFragment);
+	bool inBounds = all(greaterThan(previousUV, vec2(0.0f))) && all(lessThan(previousUV, vec2(1.0f)));
+	if (!inBounds)
 	{
-	case 0: color = albedo; break;
-	case 1: color = result; break;
-	case 2: color = vec4(normal, 1.0f); break;
-	case 3: color = vec4(depth, 0.0f, 0.0f, 1.0f); break;
-	case 4: color = vec4(worldSpaceFragment, 1.0f); break;
-	default:
-		color = vec4(1.0f, 0.0f, 1.0f, 1.0f);
-		break;
+		o_AOAccum = this_frame_ao;
+		return;
 	}
+
+	vec2 pixelSize = 1.0f / u_ViewportDims;
+
+	// we was just in da neighborhood
+	float aoPrev = texture(u_AmbientAccumulation, previousUV).r;
+	float ao1 = texture(u_AmbientAccumulation, previousUV + vec2(-pixelSize.x, 0.0f)).r;
+	float ao2 = texture(u_AmbientAccumulation, previousUV + vec2(pixelSize.x, 0.0f)).r;
+	float ao3 = texture(u_AmbientAccumulation, previousUV + vec2(0.0f, -pixelSize.y)).r;
+	float ao4 = texture(u_AmbientAccumulation, previousUV + vec2(0.0f, pixelSize.y)).r;
+	
+	float mi = min(min(min(min(aoPrev, ao1), ao2), ao3), ao4);
+	float ma = max(max(max(max(aoPrev, ao1), ao2), ao3), ao4);
+	
+	// Clamp current frame to previous frame's neighborhood
+	float this_ao = clamp(this_frame_ao, mi, ma);
+
+	// depth
+	float oldDepth = texture(u_PreviousDepth, previousUV).r;
+	float currentLinearDepth = LinearizeDepth(depth);
+	float previousLinearDepth = LinearizeDepth(oldDepth);
+	float depthDiff = abs(currentLinearDepth - previousLinearDepth);
+	const float depthThresholdMul = 0.2f;
+	float depthThreshold = depthThresholdMul * currentLinearDepth; // Scale with depth
+	float depthWeight = 1.0f - clamp(depthDiff / depthThreshold, 0.0f, 1.0f);
+
+	// normals
+	vec3 oldNormal = texture(u_PreviousNormal, previousUV).xyz;
+	float normalWeight = pow(max(0.0f, dot(normal, oldNormal)), 4.0f);
+	
+	// Motion
+	float motionLen = length(GetScreenSpaceMotionVector(worldSpaceFragment));
+	//float velocityAlpha = smoothstep(0.0f, 0.02f, motionLen);
+	float velocityAlpha = clamp(motionLen * 50.0f, 0.0f, 1.0f);
+	
+	float historyConfidence = depthWeight * normalWeight;
+	
+	// blend factor
+	const float baseAlpha = 0.05f, maxAlpha = 0.95f;
+	float alpha = mix(maxAlpha, baseAlpha, clamp(historyConfidence, 0.0f, 1.0f));
+	
+	// motion discards history
+	alpha = max(alpha, velocityAlpha);
+
+	o_AOAccum = mix(aoPrev, this_frame_ao, alpha);
+	//o_AOAccum = this_frame_ao;
 }

@@ -38,7 +38,10 @@ namespace Engine {
 
 	static std::unique_ptr<Shader> LightShader;
 	static std::unique_ptr<Shader> DefaultMeshShader;
+	static std::unique_ptr<Shader> CompositeShader;
+	static std::unique_ptr<Shader> BlitShader;
 	static std::unique_ptr<Shader> Shader_NoFragment;
+
 	static std::unique_ptr<Framebuffer> s_Framebuffer;
 
 	static std::unique_ptr<Shader> s_TextShader;
@@ -59,10 +62,13 @@ namespace Engine {
 		cameraController.m_TargetPosition = { 0.0f, 0.0f, 0.0f };
 		cameraController.m_TargetEuler = { 0.46907043f, -86.50404f, 0.0f };
 
-		LightShader = Shader::create("resources/shaders/Shader.glsl");
+		LightShader = Shader::create("resources/shaders/LightShader.glsl");
 		DefaultMeshShader = Shader::create("resources/shaders/DefaultShader.glsl");
 		SceneRenderer::s_VoxelMeshShader = Shader::create("resources/shaders/VoxelShader.glsl");
 		Shader_NoFragment = Shader::create("resources/shaders/VertexOnlyShader.glsl");
+		CompositeShader = Shader::create("resources/shaders/CompositeShader.glsl");
+		BlitShader = Shader::create("resources/shaders/BlitShader.glsl");
+
 		auto postprocessShader = Shader::create("resources/shaders/PPShader.glsl");
 
 		//meshes[1] = VoxelMesh::load_from_file("resources/models/gas_tank_22.png");
@@ -81,8 +87,15 @@ namespace Engine {
 
 			FramebufferDescriptor descriptor;
 			descriptor.ColorAttachments = {
-				{ screenWidth, screenHeight, TextureFormat::RGBA8 },
-				{ screenWidth, screenHeight, TextureFormat::RGB8S }
+				{ screenWidth, screenHeight, TextureFormat::RGBA8 }, // albedo
+				{ screenWidth, screenHeight, TextureFormat::RGB8S }, // normal
+
+				{ screenWidth, screenHeight, TextureFormat::RGB8S, false }, // normal last frame
+				{ screenWidth, screenHeight, TextureFormat::R8, false }, // AO accumulation tex 1
+				{ screenWidth, screenHeight, TextureFormat::R8, false }, // AO accumulation tex 2
+				{ screenWidth, screenHeight, TextureFormat::R16, false }, // depth last frame
+
+				{ screenWidth, screenHeight, TextureFormat::RGBA8 }, // lighting
 			};
 			FramebufferDescriptor::DepthStencilAttachment depthStencilAttachment = {
 				screenWidth, screenHeight, 24, true
@@ -90,7 +103,13 @@ namespace Engine {
 			descriptor.pDepthStencilAttachment = &depthStencilAttachment;
 
 			s_Framebuffer = Framebuffer::create(descriptor);
+			s_Framebuffer->bind();
+
+			float v = 1.0f;
+			glClearTexImage(s_Framebuffer->m_ColorAttachments[3]->get_handle(), 0, GL_RED, GL_FLOAT, &v);
+			glClearTexImage(s_Framebuffer->m_ColorAttachments[4]->get_handle(), 0, GL_RED, GL_FLOAT, &v);
 		}
+
 
 		// CREATE PASSES
 		RenderPass geometryPass;
@@ -115,15 +134,38 @@ namespace Engine {
 		lightPass.Blend = true;
 
 		// Final
+		RenderPass aoPass;
+		aoPass.pShader = postprocessShader.get();
+		aoPass.Depth.Test = DepthTest::Off;
+
 		RenderPass compositePass;
-		compositePass.pShader = postprocessShader.get();
+		compositePass.pShader = CompositeShader.get();
 		compositePass.Depth.Test = DepthTest::Off;
+
+		RenderPass blitPass;
+		blitPass.pShader = BlitShader.get();
+		blitPass.Depth.Test = DepthTest::Off;
+
+		auto reloadShaders = [&]()
+		{
+			postprocessShader.reset();
+			postprocessShader = Shader::create("resources/shaders/PPShader.glsl");
+			aoPass.pShader = postprocessShader.get();
+
+			LightShader.reset();
+			LightShader = Shader::create("resources/shaders/LightShader.glsl");
+			lightPass.pShader = LightShader.get();
+		};
 
 		// UI
 		RenderPass screenspaceUIPass;
 		screenspaceUIPass.Depth.Test = DepthTest::Off;
 		screenspaceUIPass.Blend = true;
 		screenspaceUIPass.CullFace = Face::Back;
+
+		RenderPass debug_geo_pass;
+		debug_geo_pass.Depth.Test = DepthTest::Off;
+		debug_geo_pass.pShader = DefaultMeshShader.get();
 
 		Pipeline pipeline;
 
@@ -132,6 +174,11 @@ namespace Engine {
 		gas_tank.Transform.Position = { 0.0f, 0.0f, 0.0f };
 		gas_tank.Transform.Scale = (Float3)gas_tank.Mesh.m_Texture->get_dimensions() * 0.1f;
 
+		VoxelEntity blue_car;
+		blue_car.Mesh = VoxelMesh::load_from_file("resources/models/blue_car_13.png");
+		blue_car.Transform.Position = { -4.0f, 0.0f, -2.0f };
+		blue_car.Transform.Scale = (Float3)blue_car.Mesh.m_Texture->get_dimensions() * 0.1f;
+
 		VoxelEntity box;
 		box.Mesh = VoxelMesh::load_from_file("resources/models/box_120.png");
 		box.Transform.Position = { 0.0f, 0.0f, 0.0f };
@@ -139,12 +186,19 @@ namespace Engine {
 
 		VoxelEntity transformer;
 		transformer.Mesh = VoxelMesh::load_from_file("resources/models/transformer_57.png");
-		transformer.Transform.Position = { 0.0f, 2.0f, 0.0f };
+		transformer.Transform.Position = { -5.0f, 1.05f, -4.05f };
 		transformer.Transform.Scale = (Float3)transformer.Mesh.m_Texture->get_dimensions() * 0.1f;
+
+		VoxelEntity miniPole;
+		miniPole.Mesh = VoxelMesh::load_from_file("resources/models/pole_12.png");
+		miniPole.Transform.Position = { -2.5f, 0.0f, -1.8f };
+		miniPole.Transform.Scale = (Float3)miniPole.Mesh.m_Texture->get_dimensions() * 0.1f;
 
 		auto blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
 		blueNoise->set_wrap_mode(TextureWrapMode::Repeat);
 		blueNoise->set_filter_mode(TextureFilterMode::Point);
+
+		static Matrix4 s_PreviousViewProjection = Matrix4(1.0f);
 
 		uint32_t frameNumber = 0;
 		while (m_Window->is_open())
@@ -158,8 +212,9 @@ namespace Engine {
 				cameraController.update(m_DeltaTime);
 
 				// Clear
-				s_Framebuffer->bind();
-				Graphics::clear({ 0.1f, 0.1f, 0.1f, 0.0f }, 1.0f);
+				//s_Framebuffer->bind();
+				//Graphics::clear(, 1.0f);
+				s_Framebuffer->clear({ 0.0f });
 
 				Matrix4 view = cameraController.get_view();
 				Matrix4 projection = camera.get_projection();
@@ -167,21 +222,9 @@ namespace Engine {
 				SceneRenderer::begin_frame(camera, cameraController.get_transform());
 
 				std::vector<VoxelEntity*> ENTITIES_TO_RENDER = {
-					&gas_tank, &box
-				};
-
-				Float3& position = gas_tank.Transform.Position;
-				Float3& rotation = gas_tank.Transform.Rotation;
-				{
-					if (Input::was_key_pressed(Key::UpArrow))
-						rotation.x += 90.0f;
-					if (Input::is_key_down(Key::DownArrow))
-						rotation.x -= m_DeltaTime * 10.0f;
-					if (Input::is_key_down(Key::LeftArrow))
-						rotation.y -= m_DeltaTime * 10.0f;
-					if (Input::is_key_down(Key::RightArrow))
-						rotation.y += m_DeltaTime * 10.0f;
-				}
+					&gas_tank, &transformer, &miniPole,
+					&box,
+				};				
 
 				if (Input::was_key_pressed(Key::P))
 				{
@@ -195,7 +238,12 @@ namespace Engine {
 					SceneRenderer::generate_shadow_map(ENTITIES_TO_RENDER);
 					b = false;
 				}
-				b = Input::was_key_pressed(Key::LeftMouse);
+				b = Input::was_key_pressed(Key::RightMouse);
+
+				if (Input::was_key_pressed(Key::R) && Input::is_key_down(Key::Control))
+				{
+					reloadShaders();
+				}
 
 				// GEOMETRY PASS
 				pipeline.submit_pass(geometryPass, [&]()
@@ -209,95 +257,151 @@ namespace Engine {
 						SceneRenderer::draw_voxel_entity(*e);
 				});
 
-				static Float3 lightPos = { 0.0f, 1.0f, 0.0f };
-				static float radius = 4.0f;				
-
-				auto lightTransformation = Transformation(lightPos, Float3(0.0f), Float3(radius, radius, radius)).get_transform();
-				static float attConst = 0.7f, attLinear = -0.1f, attExp = -0.13f;
-
-				// STENCIL PASS
-				if (false)
-				pipeline.submit_pass(stencilPass, [&]()
+				static Float3 lightPos = { -2.0f, 0.0f, -2.0f };
+				// LIGHTING SHT
 				{
-					glDrawBuffer(GL_NONE);
-					glClear(GL_STENCIL_BUFFER_BIT);
+					static float radius = 4.0f;
+
+					{
+						if (Input::is_key_down(Key::UpArrow))
+							lightPos.z -= m_DeltaTime / 2.0f;
+						if (Input::is_key_down(Key::DownArrow))
+							lightPos.z += m_DeltaTime / 2.0f;
+						if (Input::is_key_down(Key::LeftArrow))
+							lightPos.x -= m_DeltaTime / 2.0f;
+						if (Input::is_key_down(Key::RightArrow))
+							lightPos.x += m_DeltaTime / 2.0f;
+					}
+
+					auto lightTransformation = Transformation(lightPos, Float3(0.0f), Float3(radius * 2, radius * 2, radius * 2)).get_transform();
+					//static float attConst = 0.7f, attLinear = -0.1f, attExp = -0.13f;
+					static float intensity = 0.9f;
+
+					// STENCIL PASS
+					pipeline.submit_pass(stencilPass, [&]()
+					{
+						glDrawBuffer(GL_NONE);
+						glClear(GL_STENCIL_BUFFER_BIT);
 					
-					Shader_NoFragment->set_matrix("u_Transformation", lightTransformation);
+						Shader_NoFragment->set_matrix("u_Transformation", lightTransformation);
 					
-					Graphics::draw_sphere();
-				});
+						Graphics::draw_sphere(); // lighting volume mesh
+					});
 
-				// LIGHT PASS
-				if (false)
-				pipeline.submit_pass(lightPass, [&]()
+					s_Framebuffer->bind(); // stencil pass fucks up the draw buffers
+
+					// LIGHT PASS
+					pipeline.submit_pass(lightPass, [&]()
+					{
+						glBlendFunc(GL_ONE, GL_ONE);
+
+						// Matrices
+						LightShader->set_matrix("u_Transformation", lightTransformation);
+						LightShader->set_matrix("u_InverseView", glm::inverse(view));
+						LightShader->set_matrix("u_InverseProjection", glm::inverse(projection));
+
+						// Light params
+						//LightShader->set_float("AttConst", attConst);
+						//LightShader->set_float("AttLinear", attLinear);
+						//LightShader->set_float("AttExp", attExp);
+						LightShader->set_float("u_LightIntensity", intensity);
+						LightShader->set_float("u_LightRadius", radius);
+
+						Float3 color = { 0.9f, 0.8f, 0.05f };
+						LightShader->set_float3("u_Color", color);
+						LightShader->set_float3("u_VolumeCenter", lightPos);
+						LightShader->set_float2("u_ViewportDims", { m_Window->get_width(), m_Window->get_height() });
+						LightShader->set_int("u_FrameNumber", frameNumber);
+						s_Framebuffer->m_DepthStencilAttachment->bind(0);
+						s_Framebuffer->m_ColorAttachments[1]->bind(2);
+
+						Graphics::draw_sphere(); // lighting volume mesh
+					});
+				}
+
+				Texture2D* ao_read_texture = nullptr, *ao_write_texture = nullptr;
+				// AO PASS
+				pipeline.submit_pass(aoPass, [&]()
 				{
-					glDrawBuffer(GL_COLOR_ATTACHMENT0);
-					glBlendFunc(GL_ONE, GL_ONE);
+					// HANDLE AO PING PONG MUDAFUKA
+					{
+						uint32_t readIndex = frameNumber % 2;
+						uint32_t writeIndex = 1 - readIndex;
 
-					// Matrices
-					LightShader->set_matrix("u_Transformation", lightTransformation);
-					LightShader->set_matrix("u_InverseView", glm::inverse(view));
-					LightShader->set_matrix("u_InverseProjection", glm::inverse(projection));
+						const uint32_t aoIndex = 3;
+						uint32_t fbo = s_Framebuffer->get_handle();
+						const auto& read = s_Framebuffer->m_ColorAttachments[aoIndex + readIndex];
+						const auto& write = s_Framebuffer->m_ColorAttachments[aoIndex + writeIndex];
+						glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT3, write->get_handle(), 0);
+						ASSERT(glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
-					// Light params
-					LightShader->set_float("AttConst", attConst);
-					LightShader->set_float("AttLinear", attLinear);
-					LightShader->set_float("AttExp", attExp);
+						ao_read_texture = read.get();
+						ao_write_texture = write.get();
+						read->bind(6);
+					}
 
-					Float3 color = { 0.85f, 0.7f, 0.05f };
-					LightShader->set_float3("u_Color", color);
-					LightShader->set_float3("u_VolumeCenter", lightPos);
-					LightShader->set_float2("u_ViewportDims", { m_Window->get_width(), m_Window->get_height() });
+						// 1 u_PreviousDepth;
+						// 2 u_Albedo;
+						// 3 u_Normal;
+						// 4 u_PreviousNormal;
+						// 5 u_AmbientAccumulation;
+						// 6 u_Lighting;
+						// 7 u_ShadowMap;
+						// 8 u_BlueNoiseTexture;
+
 					s_Framebuffer->m_DepthStencilAttachment->bind(0);
-
-					Graphics::draw_sphere();
-				});
-
-				static Float2 shadowOffset = { -0.001f, 0.001f };
-
-				//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-				//pipeline.submit_pass(worldspaceUIPass, [&]()
-				//{
-				//	s_TextShader->bind();
-				//	s_TextShader->set_matrix("u_ViewProjection", get_view_projection());
-				//
-				//	auto transformation = transform({ 2.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { -1.0f, 1.0f, 1.0f });
-				//	s_TextShader->set_matrix("u_Transformation", transformation);
-				//
-				//	s_TextShader->set_float2("u_ShadowOffset", shadowOffset);
-				//
-				//	float tracking = sin(m_ElapsedTime) * 0.1f;
-				//	Graphics::draw_text("Worldspace text.", s_Font, 0.0f);
-				//	//TextShader->set_matrix("u_Transformation", transform({}, {}, { 1.0f, 1.0f, 1.0f }));
-				//	//Graphics::draw_quad();
-				//});
-				//				
-
-				static int shaderOutputColor = 0;
-				if (Input::was_key_pressed(Key::A_1)) shaderOutputColor = 0; // albedo
-				if (Input::was_key_pressed(Key::A_2)) shaderOutputColor = 1; // ao
-				if (Input::was_key_pressed(Key::A_3)) shaderOutputColor = 2; // normal
-				if (Input::was_key_pressed(Key::A_4)) shaderOutputColor = 3; // depth
-				if (Input::was_key_pressed(Key::A_5)) shaderOutputColor = 4; // worldpos
-
-				// COMPOSITE
-				pipeline.submit_pass(compositePass, [&]()
-				{
-					s_Framebuffer->m_ColorAttachments[0]->bind(1);
-					s_Framebuffer->m_ColorAttachments[1]->bind(2);
-					s_Framebuffer->m_DepthStencilAttachment->bind(0);
-					SceneRenderer::get_shadow_map()->bind(4);
-
-					blueNoise->bind(5);
+					SceneRenderer::get_shadow_map()->bind(1);
+					s_Framebuffer->m_ColorAttachments[5]->bind(2);
+				
+					s_Framebuffer->m_ColorAttachments[0]->bind(3);
+					s_Framebuffer->m_ColorAttachments[1]->bind(4);
+					s_Framebuffer->m_ColorAttachments[2]->bind(5);
+					blueNoise->bind(9);
 
 					postprocessShader->set_float("u_Time", m_ElapsedTime);
 					postprocessShader->set_matrix("u_InverseView", glm::inverse(view));
 					postprocessShader->set_matrix("u_InverseProjection", glm::inverse(projection));
-					postprocessShader->set_int("u_Output", shaderOutputColor);
+					postprocessShader->set_matrix("u_PrevFrameViewProjection", s_PreviousViewProjection);
 					postprocessShader->set_float3("u_CameraPos", cameraController.m_Transformation.Position);
-					postprocessShader->set_int("u_FrameNumber", frameNumber++);
+					postprocessShader->set_int("u_FrameNumber", frameNumber);
 
 					Graphics::draw_fullscreen_triangle(postprocessShader);
+				});
+
+				// BLIT A BIT O DAT SHIT
+				pipeline.submit_pass(blitPass, [&]()
+				{
+					s_Framebuffer->m_DepthStencilAttachment->bind(0);
+					s_Framebuffer->m_ColorAttachments[1]->bind(1);
+					Graphics::draw_fullscreen_triangle(BlitShader);
+				});
+
+				// READS AO ACCUM
+				pipeline.submit_pass(compositePass, [&]()
+				{
+					glBindFramebuffer(GL_FRAMEBUFFER, 0);
+					s_Framebuffer->m_ColorAttachments[0]->bind(0);
+					s_Framebuffer->m_ColorAttachments[1]->bind(1);
+					ao_write_texture->bind(2);
+					s_Framebuffer->m_ColorAttachments[6]->bind(3);
+
+					static int shaderOutputColor = 0;
+					if (Input::was_key_pressed(Key::A_1)) shaderOutputColor = 0; // final
+					if (Input::was_key_pressed(Key::A_2)) shaderOutputColor = 1; // albedo
+					if (Input::was_key_pressed(Key::A_3)) shaderOutputColor = 2; // normal
+					if (Input::was_key_pressed(Key::A_4)) shaderOutputColor = 3; // ao
+					CompositeShader->set_int("u_Output", shaderOutputColor);
+
+					Graphics::draw_fullscreen_triangle(CompositeShader);
+				});
+
+				pipeline.submit_pass(debug_geo_pass, [&]()
+				{
+					glBindFramebuffer(GL_FRAMEBUFFER, 0);
+					Matrix4 debuglighttransform = Transformation(lightPos, {}, { 0.2f, 0.2f, 0.2f }).get_transform();
+					DefaultMeshShader->set_matrix("u_Transformation", debuglighttransform);
+				
+					Graphics::draw_sphere();
 				});
 
 				Float2 viewport = { (float)m_Window->get_width(), (float)m_Window->get_height() };
@@ -318,6 +422,9 @@ namespace Engine {
 						Graphics::draw_text(std::format("fps: {}", 1.0f / m_DeltaTime), s_Font);
 					}
 				});
+
+				s_PreviousViewProjection = pipeline.m_ViewProjectionMatrix;
+				frameNumber++;
 			}
 
 			// Time

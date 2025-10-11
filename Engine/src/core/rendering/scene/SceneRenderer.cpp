@@ -73,16 +73,16 @@ namespace Engine {
 
 	void SceneRenderer::generate_shadow_map(const std::vector<VoxelEntity*>& entities)
 	{
-		uint32_t MapWidth = 250;
-		uint32_t MapHeight = 250;
-		uint32_t MapDepth = 250;
+		uint32_t MapWidth = 220;
+		uint32_t MapHeight = 120;
+		uint32_t MapDepth = 220;
 		Int3 MapDimensions = { MapWidth, MapHeight, MapDepth };
 		uint32_t MapArea = MapWidth * MapHeight * MapDepth;
 
 		static uint8_t* shadowMapPixels = new uint8_t[MapArea]; // TODO: delete dat shit
 		if (!s_ShadowMap)
 		{
-			s_ShadowMap = Texture3D::create(MapWidth, MapHeight, MapDepth, TextureFormat::R8);
+			s_ShadowMap = Texture3D::create(MapWidth, MapHeight, MapDepth, TextureFormat::R8, 3);
 		}
 		memset(shadowMapPixels, 0, MapArea);
 
@@ -130,6 +130,7 @@ namespace Engine {
 			}
 
 			s_ShadowMap->set_data(shadowMapPixels);
+			s_ShadowMap->generate_mips();
 		}
 	}
 

@@ -243,7 +243,17 @@ namespace Engine {
 		glClearColor(color.r, color.g, color.b, color.a);
 		glColorMask(1, 1, 1, 1); // TODO: save state prob
 		glDepthMask(true);		 // TODO: save state prob
+
+		//uint32_t bufs[] = { GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 };
+		//glDrawBuffers(2, bufs);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	}
+
+	void Graphics::clear(float r, uint32_t* bufs, size_t n)
+	{
+		glDrawBuffers(n, bufs);
+		glClearColor(r, 1.0f, 1.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 	}
 
 	void Graphics::draw_indexed(uint32_t count)
@@ -277,7 +287,7 @@ namespace Engine {
 
 		shader->set_float2("u_ViewportDims", s_ViewportDims);
 
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 	}	
 

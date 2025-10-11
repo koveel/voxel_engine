@@ -59,72 +59,61 @@ bool Approx(float a, float b)
 	return abs(a - b) < epsilon;
 }
 
-void RaymarchVoxelTexture(
-	vec3 rayOrigin, vec3 rayDirection, vec3 transformedObbCenter, 
+void RaymarchVoxelMesh(
+	vec3 rayOrigin, vec3 rayDirection, vec3 transformedObbCenter,
 	out vec4 color, out vec3 normal, out float t, out ivec3 voxel
 )
 {
 	const float VoxelScale = 0.1f;
 
 	// Bounding box
-	vec3 worldspaceExtents = (u_VoxelDimensions * VoxelScale) / 2.0f;
+	vec3 worldspaceExtents = (u_VoxelDimensions * VoxelScale) * 0.5f;
 	vec3 p0 = transformedObbCenter - worldspaceExtents;
 	vec3 p1 = transformedObbCenter + worldspaceExtents;
 
 	float hit = RayAABB(rayOrigin, rayDirection, p0, p1);
-
 	vec3 voxels_per_unit = u_VoxelDimensions / (p1 - p0);
-
 	vec3 entry = ((rayOrigin + rayDirection * (hit + 0.0001f)) - p0) * voxels_per_unit;
 	vec3 entry_worldspace = rayOrigin + rayDirection * hit;
 
 	vec3 step = sign(rayDirection);
 	vec3 delta = abs(1.0f / rayDirection);
-
-	vec3 pos = clamp(floor(entry), vec3(0.0f, 0.0f, 0.0f), vec3(u_VoxelDimensions));
-
-	vec3 tMax = (pos - entry + max(step, 0)) / rayDirection;
+	vec3 pos = clamp(floor(entry), vec3(0.0f), vec3(u_VoxelDimensions));
+	vec3 tMax = (pos - entry + max(step, 0.0)) / rayDirection;
 
 	int axis = 0;
 	int maxSteps = u_VoxelDimensions.x + u_VoxelDimensions.y + u_VoxelDimensions.z;
+
 	for (int i = 0; i < maxSteps; i++)
 	{
 		ivec3 voxelPos = ivec3(pos);
-		// Look up the exact voxel color in the 3D texture (don't sample)
+
 		color = texelFetch(u_VoxelTexture, voxelPos, 0);
 		if (color.r != 0.0f)
 		{
 			voxel = voxelPos;
 
-			// Edge voxel
+			// edge voxel
 			if (i == 0)
 			{
 				t = hit;
-
-				// Determine normal (theres probably a better way to do this)
+				// Determine normal
 				for (int a = 0; a < 3; a++)
 				{
 					float v = entry_worldspace[a];
 					if (Approx(v, p0[a]) || Approx(v, p1[a]))
 					{
-						normal = vec3(0.0f, 0.0f, 0.0f);
+						normal = vec3(0.0f);
 						normal[a] = -step[a];
 						break;
 					}
 				}
-
 				return;
 			}
 
-			normal = vec3(0.0f, 0.0f, 0.0f);
-			switch (axis)
-			{
-			case 0: normal.x = -step.x; break;
-			case 1: normal.y = -step.y; break;
-			case 2: normal.z = -step.z; break;
-			}
+			normal = vec3(0.0f);
+			normal[axis] = -step[axis];
 
-			// Time of intersection
 			t = hit + (tMax[axis] - delta[axis]) / voxels_per_unit[axis];
 			return;
 		}
@@ -133,19 +122,17 @@ void RaymarchVoxelTexture(
 		{
 			if (tMax.x < tMax.z)
 			{
-				pos.x = pos.x + step.x;
+				pos.x += step.x;
 				if (pos.x < 0 || pos.x >= u_VoxelDimensions.x)
 					break;
-				t = tMax.x;
 				tMax.x += delta.x;
 				axis = 0;
 			}
 			else
 			{
-				pos.z = pos.z + step.z;
+				pos.z += step.z;
 				if (pos.z < 0 || pos.z >= u_VoxelDimensions.z)
 					break;
-				t = tMax.z;
 				tMax.z += delta.z;
 				axis = 2;
 			}
@@ -154,19 +141,17 @@ void RaymarchVoxelTexture(
 		{
 			if (tMax.y < tMax.z)
 			{
-				pos.y = pos.y + step.y;
+				pos.y += step.y;
 				if (pos.y < 0 || pos.y >= u_VoxelDimensions.y)
 					break;
-				t = tMax.y;
 				tMax.y += delta.y;
 				axis = 1;
 			}
 			else
 			{
-				pos.z = pos.z + step.z;
+				pos.z += step.z;
 				if (pos.z < 0 || pos.z >= u_VoxelDimensions.z)
 					break;
-				t = tMax.z;
 				tMax.z += delta.z;
 				axis = 2;
 			}
@@ -200,7 +185,7 @@ void main()
 	float t;
 	ivec3 voxel;
 	
-	RaymarchVoxelTexture(relativeCam.xyz, -relativeViewDir.xyz, transformedObbCenter, colSample, normal, t, voxel);
+	RaymarchVoxelMesh(relativeCam.xyz, -relativeViewDir.xyz, transformedObbCenter, colSample, normal, t, voxel);
 
 	vec3 hitpoint = u_CameraPosition - cameraToPixel * t;
 	gl_FragDepth = LinearizeDepth(hitpoint);

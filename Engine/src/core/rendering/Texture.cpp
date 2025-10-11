@@ -149,6 +149,11 @@ namespace Engine {
 		memcpy(m_PixelData, data, m_Width * m_Height * m_Depth);
 	}
 
+	void Texture3D::generate_mips()
+	{
+		glGenerateTextureMipmap(m_ID);
+	}
+
 	void Texture3D::bind(uint32_t slot) const
 	{
 		glBindTextureUnit(slot, m_ID);

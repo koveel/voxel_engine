@@ -79,6 +79,8 @@ namespace Engine {
 		uint32_t get_depth() const { return m_Depth; }
 		Int3 get_dimensions() const { return Int3(m_Width, m_Height, m_Depth); }
 
+		void generate_mips();
+
 		void bind(uint32_t slot = 0) const;
 		uint32_t get_handle() const { return m_ID; }
 

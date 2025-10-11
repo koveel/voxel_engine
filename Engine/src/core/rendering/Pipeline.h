@@ -46,8 +46,6 @@ namespace Engine {
 	class Pipeline
 	{
 	public:
-		using RenderCommand = void(*)();
-	public:
 		Pipeline() = default;
 		~Pipeline();
 
