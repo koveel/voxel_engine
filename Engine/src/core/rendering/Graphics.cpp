@@ -29,6 +29,7 @@ namespace Engine {
 		ASSERT(false);
 	}
 	
+	static std::unique_ptr<VertexArray> s_QuadVAO;
 	static std::unique_ptr<VertexArray> s_CubeVAO;
 	static std::unique_ptr<VertexArray> s_SphereVAO;
 	static std::unique_ptr<VertexArray> s_FullscreenTriangleVAO;
@@ -52,6 +53,33 @@ namespace Engine {
 	}
 
 	extern void init_text();
+
+	static void init_quad()
+	{
+		s_QuadVAO = VertexArray::create();
+
+		Float4 vertices[] =
+		{
+			{  0.5f,  0.5f, 1.0f, 1.0f },
+			{ -0.5f,  0.5f, 0.0f, 1.0f },
+			{ -0.5f, -0.5f, 0.0f, 0.0f },
+			{  0.5f, -0.5f, 1.0f, 0.0f },
+		};
+
+		uint32_t indices[] =
+		{
+			0, 1, 2, 2, 3, 0
+		};
+
+		auto vbo = VertexBuffer::create(vertices, sizeof(vertices));
+		vbo->set_layout({
+			{ ShaderDataType::Float2 },
+			{ ShaderDataType::Float2 },
+		});
+
+		s_QuadVAO->add_vertex_buffer(std::move(vbo));
+		s_QuadVAO->set_index_buffer(IndexBuffer::create(indices, std::size(indices)));
+	}
 
 	static void init_cube()
 	{
@@ -163,11 +191,15 @@ namespace Engine {
 
 		glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, false);
 #endif
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 		set_depth_test(DepthTest::Less);
 		glClearDepth(1.0f);
 		glEnable(GL_MULTISAMPLE);
 
 		set_face_cull(Face::Back);
+		init_quad();
 		init_cube();
 		init_text();
 		init_sphere();
@@ -196,6 +228,16 @@ namespace Engine {
 			glEnable(GL_BLEND);
 		else
 			glDisable(GL_BLEND);
+	}
+
+	void Graphics::reset_draw_buffers()
+	{
+		glDrawBuffer(GL_NONE);
+	}
+
+	void Graphics::set_draw_buffers(uint32_t* buffers, size_t count)
+	{
+		glDrawBuffers(count, buffers);
 	}
 
 	void Graphics::set_depth_mask(bool mask)
@@ -246,14 +288,7 @@ namespace Engine {
 
 		//uint32_t bufs[] = { GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 };
 		//glDrawBuffers(2, bufs);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	}
-
-	void Graphics::clear(float r, uint32_t* bufs, size_t n)
-	{
-		glDrawBuffers(n, bufs);
-		glClearColor(r, 1.0f, 1.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	}
 
 	void Graphics::draw_indexed(uint32_t count)
@@ -277,6 +312,7 @@ namespace Engine {
 
 	void Graphics::draw_quad()
 	{
+		s_QuadVAO->bind();
 		draw_indexed(6);
 	}
 

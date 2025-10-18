@@ -38,8 +38,8 @@ float CastAmbientOcclusionRay(vec3 origin, vec3 direction)
 
 	for (int lod = 0; lod < 3; lod++) {
 		rayOrigin = origin + direction * ((totalTraveled + float(lod == 0)) * 1.01f * g_ShadowLODScales[lod]); // brless first mip offset
-	
-		bool hit = RaycastShadowMapVariableFidelity(rayOrigin, direction, t, g_ShadowLODScales[lod], g_ShadowLODDistances[lod], lod);
+
+		bool hit = RaycastShadowMapVariableFidelity(rayOrigin, direction, t, g_ShadowLODDistances[lod], lod);
 		totalTraveled += t;
 	
 		if (hit) {

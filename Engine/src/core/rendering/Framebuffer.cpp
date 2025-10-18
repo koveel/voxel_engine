@@ -96,6 +96,16 @@ namespace Engine {
 		}
 	}
 
+	void Framebuffer::set_index_handle(uint32_t index, uint32_t handle)
+	{
+		glNamedFramebufferTexture(m_ID, GL_COLOR_ATTACHMENT0 + index, handle, 0);
+	}
+
+	void Framebuffer::unbind()
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+
 	std::unique_ptr<Framebuffer> Framebuffer::create(const FramebufferDescriptor& descriptor)
 	{
 		return std::unique_ptr<Framebuffer>(new Framebuffer(descriptor));

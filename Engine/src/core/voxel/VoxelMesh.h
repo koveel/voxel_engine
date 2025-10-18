@@ -1,7 +1,10 @@
 #pragma once
 
 namespace Engine {
-	
+
+	class Texture2D;
+	class Texture3D;
+
 	class VoxelMesh
 	{
 	public:
@@ -10,9 +13,11 @@ namespace Engine {
 		static VoxelMesh load_from_file(const std::filesystem::path& filepath);
 
 		uint32_t m_MaterialIndex = 0;
-		std::unique_ptr<Texture3D> m_Texture;
 
+		std::unique_ptr<Texture3D> m_Texture;
 		static std::unique_ptr<Texture2D> s_MaterialPalette;
+	private:
+		uint32_t m_FilledVoxelCount = 0;
 	};
 
 }

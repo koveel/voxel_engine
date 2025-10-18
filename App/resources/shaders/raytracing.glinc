@@ -1,6 +1,6 @@
 // Depth texture always bound to sampler slot 0
 layout(binding = 0) uniform sampler2D u_DepthTexture;
-layout(binding = 1) uniform sampler3D u_ShadowMap;
+layout(binding = 1) uniform usampler3D u_ShadowMap;
 layout(binding = 9) uniform sampler2D u_BlueNoiseTexture;
 
 uniform mat4 u_InverseView;
@@ -51,8 +51,9 @@ vec3 RandomDirectionOnHemisphere(vec3 normal, ivec2 pixel, int frame, int sample
 	return normalize(x * tangent + y * bitangent + z * normal);
 }
 
-bool RaycastShadowMapVariableFidelity(vec3 origin, vec3 direction, out float t, const float voxelScale, const int maxDistanceMeters, const int mipLevel)
+bool RaycastShadowMapVariableFidelity(vec3 origin, vec3 direction, out float t, const int maxDistanceMeters, const int mipLevel)
 {
+	const float voxelScale = g_ShadowLODScales[mipLevel];
 	ivec3 mapDimensions = textureSize(u_ShadowMap, mipLevel);
 
 	vec3 worldspaceExtents = (mapDimensions * voxelScale) / 2.0f;
@@ -76,7 +77,7 @@ bool RaycastShadowMapVariableFidelity(vec3 origin, vec3 direction, out float t, 
 	}
 
 	for (int i = 0; i < maxSteps; i++) {
-		if (texelFetch(u_ShadowMap, pos, mipLevel).r != 0.0f) {
+		if (texelFetch(u_ShadowMap, pos, mipLevel).r != 0) {
 			// Find which axis we just crossed
 			int axis = (tMax.x < tMax.y) ? ((tMax.x < tMax.z) ? 0 : 2) : ((tMax.y < tMax.z) ? 1 : 2);
 			t = (tMax[axis] - delta[axis]) * voxelScale;

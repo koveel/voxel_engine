@@ -4,6 +4,8 @@ namespace Engine {
 
 	enum class TextureFormat
 	{
+		R8UI   = 0x8232,
+
 		R8     = 0x8229,
 		R16    = 0x822A,
 		R32F   = 0x822E,
@@ -44,6 +46,7 @@ namespace Engine {
 		void set_wrap_mode(TextureWrapMode mode);
 
 		void set_data(const void* data, uint32_t x = 0, uint32_t y = 0, uint32_t width = 0, uint32_t height = 0, uint32_t mip = 0);
+		void clear_to(const void* data);
 
 		uint32_t get_width() const { return m_Width; }
 		uint32_t get_height() const { return m_Height; }

@@ -31,10 +31,10 @@ void main()
 	vec3 normal = texture(u_Normals, uv).xyz;
 	vec4 lighting = texture(u_Lighting, uv);
 
-	vec4 final = albedo * vec4(vec3(ao), 1.0f);
+	vec4 final = albedo * vec4(vec3(ao), 1.0f) + lighting;
 	switch (u_Output)
 	{
-	case 0: o_Color = final + lighting; break;
+	case 0: o_Color = final; break;
 	case 1: o_Color = albedo; break;
 	case 2: o_Color = vec4(normal, 1.0f); break;
 	case 3: o_Color = vec4(0.0f, 0.0f, ao, 1.0f);

@@ -16,8 +16,8 @@ namespace Engine {
 
 	Image image_load_from_file(const std::filesystem::path& path, bool flipVertically = true);
 
-	void image_swap_channels(uint8_t* abgr_dest, const uint8_t* rgba_src, uint32_t size);
-	void remap_24bpp_to_32bpp(uint8_t* dest32, const uint8_t* source24, uint32_t width, uint32_t height);
+	//void image_swap_channels(uint8_t* abgr_dest, const uint8_t* rgba_src, uint32_t size);
+	//void remap_24bpp_to_32bpp(uint8_t* dest32, const uint8_t* source24, uint32_t width, uint32_t height);
 
 	int find_nth_index_of_char(const std::string& string, size_t n, char c);
 

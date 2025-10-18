@@ -21,7 +21,13 @@ namespace Engine {
 		case TextureFormat::RG8:     return GL_RG;
 		case TextureFormat::RGB8:    return GL_RGB;
 		case TextureFormat::RGBA8:   return GL_RGBA;
+		case TextureFormat::R8UI:    return GL_RED_INTEGER;
 		}
+	}
+	
+	static bool is_integer_format(TextureFormat format)
+	{
+		return format == TextureFormat::R8UI;
 	}
 
 	Texture2D::Texture2D(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips)
@@ -72,19 +78,26 @@ namespace Engine {
 			dataType = GL_UNSIGNED_BYTE;
 			break;
 		}
+		case GL_RED_INTEGER: {
+			dataType = GL_UNSIGNED_BYTE;
+			break;
+		}
 		case GL_RGB: {
 			dataType = GL_UNSIGNED_BYTE;
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 			break;
 		}
 		case GL_RGBA: {
-			dataType = GL_UNSIGNED_INT_8_8_8_8;
-			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+			dataType = GL_UNSIGNED_INT_8_8_8_8_REV;
 			break;
 		}
 		}
 
 		glTextureSubImage2D(m_ID, mip, x, y, width, height, m_DataFormat, dataType, data);
+	}
+
+	void Texture2D::clear_to(const void* data)
+	{
+		glClearTexImage(m_ID, 0, m_DataFormat, GL_FLOAT, data);
 	}
 
 	std::unique_ptr<Texture2D> Texture2D::load(const std::filesystem::path& filepath)
@@ -96,7 +109,7 @@ namespace Engine {
 		result->set_data(image.pixels);
 
 		return result;
- 	}
+	}
 
 	std::unique_ptr<Texture2D> Texture2D::create(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips)
 	{
@@ -139,6 +152,7 @@ namespace Engine {
 		case GL_RG: dataType = GL_UNSIGNED_SHORT; break;
 		case GL_RGB: dataType = GL_UNSIGNED_INT; break;
 		case GL_RGBA: dataType = GL_UNSIGNED_INT_8_8_8_8; break;
+		case GL_RED_INTEGER: dataType = GL_UNSIGNED_BYTE; break;
 		}
 
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);

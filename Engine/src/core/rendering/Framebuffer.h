@@ -34,8 +34,11 @@ namespace Engine {
 		void clear(const Color& color);
 		void resize(uint32_t width, uint32_t height);
 
+		void set_index_handle(uint32_t index, uint32_t handle);
+
 		uint32_t get_handle() const { return m_ID; }
 
+		static void unbind();
 		static std::unique_ptr<Framebuffer> create(const FramebufferDescriptor& descriptor);
 	private:
 		uint32_t m_ID = 0;

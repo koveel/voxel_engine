@@ -43,39 +43,39 @@ namespace Engine {
 		stbi_image_free(pixels);
 	}
 
-	void image_swap_channels(uint8_t* abgr_dest, const uint8_t* rgba_src, uint32_t size)
-	{
-		/*
-		[0, 1, 2, 3]
-		*/
-
-		for (size_t i = 0; i < size; i += 4)
-		{
-			abgr_dest[i + 0] = rgba_src[i + 3];
-			abgr_dest[i + 1] = rgba_src[i + 2];
-			abgr_dest[i + 2] = rgba_src[i + 1];
-			abgr_dest[i + 3] = rgba_src[i + 0];
-		}
-	}
-
-	void remap_24bpp_to_32bpp(uint8_t* dest32, const uint8_t* source24, uint32_t width, uint32_t height)
-	{
-		constexpr uint32_t DestChannels = 4, SrcChannels = 3;
-
-		uint32_t destIndex = 0;
-		for (uint32_t i = 0; i < width * height * SrcChannels; i += SrcChannels)
-		{
-			uint8_t r = source24[i];
-			uint8_t g = source24[i + 1];
-			uint8_t b = source24[i + 2];
-
-			dest32[destIndex] = r;
-			dest32[destIndex + 1] = g;
-			dest32[destIndex + 2] = b;
-			dest32[destIndex + 3] = 255;
-			destIndex += 4;
-		}
-	}
+	//void image_swap_channels(uint8_t* abgr_dest, const uint8_t* rgba_src, uint32_t size)
+	//{
+	//	/*
+	//	[0, 1, 2, 3]
+	//	*/
+	//
+	//	for (size_t i = 0; i < size; i += 4)
+	//	{
+	//		abgr_dest[i + 0] = rgba_src[i + 3];
+	//		abgr_dest[i + 1] = rgba_src[i + 2];
+	//		abgr_dest[i + 2] = rgba_src[i + 1];
+	//		abgr_dest[i + 3] = rgba_src[i + 0];
+	//	}
+	//}
+	//
+	//void remap_24bpp_to_32bpp(uint8_t* dest32, const uint8_t* source24, uint32_t width, uint32_t height)
+	//{
+	//	constexpr uint32_t DestChannels = 4, SrcChannels = 3;
+	//
+	//	uint32_t destIndex = 0;
+	//	for (uint32_t i = 0; i < width * height * SrcChannels; i += SrcChannels)
+	//	{
+	//		uint8_t r = source24[i];
+	//		uint8_t g = source24[i + 1];
+	//		uint8_t b = source24[i + 2];
+	//
+	//		dest32[destIndex] = r;
+	//		dest32[destIndex + 1] = g;
+	//		dest32[destIndex + 2] = b;
+	//		dest32[destIndex + 3] = 255;
+	//		destIndex += 4;
+	//	}
+	//}
 	int find_nth_index_of_char(const std::string& string, size_t idx, char c)
 	{
 		size_t n = 0;

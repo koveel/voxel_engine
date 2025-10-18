@@ -39,7 +39,11 @@ namespace Engine {
 			} FaceOp[2]; // 0 = Face::Front, 1 = Face::Back
 		} Stencil;
 
-		bool Blend = false;
+		struct
+		{
+			bool Enable = false;
+			uint32_t SFactor = 0, DFactor = 0;
+		} Blend;
 		class Shader* pShader = nullptr; // TODO: use shared_ptr instead or sm shit
 	};
 

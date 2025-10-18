@@ -3,10 +3,20 @@
 #include "utils/Camera.h"
 #include "voxel/VoxelEntity.h"
 
-class Shader;
-class Texture3D;
-
 namespace Engine {
+
+	class Shader;
+	class Texture3D;
+
+	struct TracedRay
+	{
+		Float3 direction{};
+		Float3 hitpoint{};
+		bool hit = false;
+		float t = 0.0f;
+		uint8_t sample = 0;
+		Int3 cell{};
+	};
 
 	class SceneRenderer
 	{
@@ -17,7 +27,11 @@ namespace Engine {
 
 		static void generate_shadow_map(const std::vector<VoxelEntity*>& entities);
 
+		static TracedRay trace_ray_through_scene(Float3 origin, Float3 direction, float maxDistanceMeters);
+
 		static Texture3D* get_shadow_map() { return s_ShadowMap.get(); }
+	private:
+		static uint8_t sample_shadow_map(Int3 cell);
 	private:
 		static Float3 s_CameraPosition;
 		static Matrix4 s_View, s_Projection;

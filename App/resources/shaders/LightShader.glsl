@@ -27,10 +27,6 @@ uniform vec3 u_VolumeCenter;
 uniform float u_LightRadius;
 uniform float u_LightIntensity;
 
-//uniform float AttConst;
-//uniform float AttLinear;
-//uniform float AttExp;
-
 uniform vec2 u_ViewportDims;
 
 #include "raytracing.glinc"
@@ -42,14 +38,11 @@ void main()
 	vec2 uv = gl_FragCoord.xy / u_ViewportDims;
 	vec3 normal = texture(u_Normals, uv).xyz;
 	vec3 worldPos = ReconstructWorldSpaceFromDepth(uv);
+	
 	vec3 toLight = u_VolumeCenter - worldPos;
 	float dist = length(toLight);
-	vec3 directionToLight = toLight / dist;
+	vec3 directionToLight = normalize(toLight);
 
-	//float normalizedDist = dist / u_LightRadius;
-	//float falloff = u_LightIntensity * (1.0 - smoothstep(0.0, 1.0, normalizedDist)) / (dist * dist);
-
-	// Or even simpler - just smooth radial falloff
 	float falloff = u_LightIntensity * (1.0 - smoothstep(0.0, u_LightRadius, dist));
 
 	float NdotL = max(0.0, dot(normal, directionToLight));
@@ -60,15 +53,18 @@ void main()
 		return;
 	}
 
-	vec3 rayOrigin = worldPos + directionToLight * (g_BaseVoxelScale * 0.5f);
+	const int LOD = 0;
+	const float voxel_scale = g_ShadowLODScales[LOD];
+	vec3 rayOrigin = worldPos + directionToLight * (voxel_scale * 0.5f);
 	float d2 = distance(rayOrigin, u_VolumeCenter);
 
 	float t;
-	int maxDistMeters = int(ceil(dist / g_BaseVoxelScale)) + 1;
-	bool occluded = RaycastShadowMapVariableFidelity(rayOrigin, directionToLight, t, g_BaseVoxelScale, maxDistMeters, 0);
+	int maxDistMeters = int(ceil(dist / voxel_scale)) + 1;
 
-	const float bias = g_BaseVoxelScale;
-	if (occluded && t < (d2 - bias)) {
+	bool occluded = RaycastShadowMapVariableFidelity(rayOrigin, directionToLight, t, maxDistMeters, LOD);
+
+	const float bias = voxel_scale;
+	if (occluded && t < dist) {
 		discard;
 		return;
 	}

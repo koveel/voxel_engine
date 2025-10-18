@@ -34,13 +34,19 @@ namespace Engine {
 		DecrementWrap = 0X8508,
 	};
 
+	//enum class ClearTarget
+	//{
+	//	Color = 0x00004000,
+	//	Depth = 0x00000100,
+	//	Stencil = 0x00000400,
+	//};
+
 	class Graphics
 	{
 	public:
 		static void init();
 
 		static void clear(const Color& color, float depth = 1.0f);
-		static void clear(float r, uint32_t* bufs, size_t n);
 		static void draw_indexed(uint32_t count);
 
 		static void set_color_mask(uint32_t buf, bool r, bool g, bool b, bool a);
@@ -55,6 +61,9 @@ namespace Engine {
 		static void set_face_stencil_op(Face face, StencilOp stencilFail, StencilOp stencilPassDepthFail, StencilOp stencilDepthPass);
 
 		static void toggle_blend(bool enabled);
+
+		static void reset_draw_buffers(); // set to GL_NONE
+		static void set_draw_buffers(uint32_t* buffers, size_t count);
 
 		static void draw_cube();
 		static void draw_sphere();

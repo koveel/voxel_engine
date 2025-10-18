@@ -23,7 +23,7 @@ layout(location = 1) out vec3 o_Normal;
 
 in vec3 o_VertexWorldSpace;
 
-layout(binding = 0) uniform sampler3D u_VoxelTexture;
+layout(binding = 0) uniform usampler3D u_VoxelTexture;
 layout(binding = 1) uniform sampler2D u_MaterialPalette;
 
 uniform vec3 u_CameraPosition;
@@ -61,7 +61,8 @@ bool Approx(float a, float b)
 
 void RaymarchVoxelMesh(
 	vec3 rayOrigin, vec3 rayDirection, vec3 transformedObbCenter,
-	out vec4 color, out vec3 normal, out float t, out ivec3 voxel
+	//out vec4 color, out vec3 normal, out float t, out ivec3 voxel
+	out int color, out vec3 normal, out float t, out ivec3 voxel
 )
 {
 	const float VoxelScale = 0.1f;
@@ -88,9 +89,11 @@ void RaymarchVoxelMesh(
 	{
 		ivec3 voxelPos = ivec3(pos);
 
-		color = texelFetch(u_VoxelTexture, voxelPos, 0);
-		if (color.r != 0.0f)
+		uint col = texelFetch(u_VoxelTexture, voxelPos, 0).r;
+		//color = texelFetch(u_VoxelTexture, voxelPos, 0);
+		if (col != 0)
 		{
+			color = int(col);
 			voxel = voxelPos;
 
 			// edge voxel
@@ -181,16 +184,18 @@ void main()
 	vec3 transformedObbCenter = (u_OBBOrientation * vec4(u_OBBCenter, 1.0f)).xyz;
 
 	vec4 colSample;
+	int col;
 	vec3 normal;
 	float t;
 	ivec3 voxel;
 	
-	RaymarchVoxelMesh(relativeCam.xyz, -relativeViewDir.xyz, transformedObbCenter, colSample, normal, t, voxel);
+	RaymarchVoxelMesh(relativeCam.xyz, -relativeViewDir.xyz, transformedObbCenter, col, normal, t, voxel);
 
 	vec3 hitpoint = u_CameraPosition - cameraToPixel * t;
 	gl_FragDepth = LinearizeDepth(hitpoint);
 
-	int colorIndex = int(colSample.r * 255);
+	int colorIndex = col;
+	//int colorIndex = int(colSample.r * 255);
 	o_Albedo = texelFetch(u_MaterialPalette, ivec2(colorIndex, u_MaterialIndex), 0);
 	o_Normal = (u_OBBOrientation * vec4(normal, 1.0f)).xyz;
 }

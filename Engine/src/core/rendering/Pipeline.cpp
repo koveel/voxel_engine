@@ -4,6 +4,8 @@
 #include "Pipeline.h"
 #include "Graphics.h"
 
+#include <glad/glad.h>
+
 namespace Engine {
 
 	Pipeline::~Pipeline()
@@ -54,7 +56,8 @@ namespace Engine {
 			}
 		}
 
-		Graphics::toggle_blend(pass.Blend);
+		//glBlendFunc(pass.Blend.SFactor, pass.Blend.DFactor);
+		Graphics::toggle_blend(pass.Blend.Enable);
 	}
 
 }

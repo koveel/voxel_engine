@@ -73,16 +73,16 @@ namespace Engine {
 
 	void SceneRenderer::generate_shadow_map(const std::vector<VoxelEntity*>& entities)
 	{
-		uint32_t MapWidth = 220;
-		uint32_t MapHeight = 120;
-		uint32_t MapDepth = 220;
+		uint32_t MapWidth = 250;
+		uint32_t MapHeight = 150;
+		uint32_t MapDepth = 250;
 		Int3 MapDimensions = { MapWidth, MapHeight, MapDepth };
 		uint32_t MapArea = MapWidth * MapHeight * MapDepth;
 
 		static uint8_t* shadowMapPixels = new uint8_t[MapArea]; // TODO: delete dat shit
 		if (!s_ShadowMap)
 		{
-			s_ShadowMap = Texture3D::create(MapWidth, MapHeight, MapDepth, TextureFormat::R8, 3);
+			s_ShadowMap = Texture3D::create(MapWidth, MapHeight, MapDepth, TextureFormat::R8UI, 3);
 		}
 		memset(shadowMapPixels, 0, MapArea);
 
@@ -132,6 +132,94 @@ namespace Engine {
 			s_ShadowMap->set_data(shadowMapPixels);
 			s_ShadowMap->generate_mips();
 		}
+	}
+
+	TracedRay SceneRenderer::trace_ray_through_scene(Float3 origin, Float3 direction, float maxDistanceMeters)
+	{
+		constexpr float VoxelScale = 0.1f;
+		Int3 mapDimensions = s_ShadowMap->get_dimensions();
+
+		Float3 worldspaceExtents = (Float3(mapDimensions) * VoxelScale) / 2.0f;
+		Float3 boundsMin = -worldspaceExtents;
+
+		Float3 voxelsPerUnit = Float3(1.0f / VoxelScale);
+
+		Float3 entry = (origin - boundsMin) * voxelsPerUnit;
+		Float3 step = glm::sign(direction);
+		Int3 iStep = Int3(step);
+
+		Float3 delta = glm::abs(1.0f / direction);
+		Int3 pos = Int3(glm::clamp(glm::floor(entry), Float3(0.0f), Float3(mapDimensions) - 1.0f));
+		Float3 tMax = (Float3(pos) - entry + glm::max(step, 0.0f)) / direction;
+
+		TracedRay result;
+		result.direction = direction;
+		 
+		// early exit
+		if (glm::any(glm::lessThan(pos, Int3(0))) || glm::any(glm::greaterThan(pos, mapDimensions))) {
+			result.t = maxDistanceMeters;
+			return result;
+		}
+
+		int maxSteps = (int)(maxDistanceMeters / VoxelScale);
+		for (int i = 0; i < maxSteps; i++) {
+			Int3 uv = 
+			{ 
+				pos.x,
+				pos.y,
+				pos.z,
+			};
+			uint8_t sample = sample_shadow_map(uv);
+			if (sample != 0) {
+				// Find which axis we just crossed
+				int axis = (tMax.x < tMax.y) ? ((tMax.x < tMax.z) ? 0 : 2) : ((tMax.y < tMax.z) ? 1 : 2);
+				result.t = (tMax[axis] - delta[axis]) * VoxelScale;
+				result.hitpoint = origin + direction * result.t;
+				result.sample = sample;
+				result.hit = true;
+				result.cell = pos - mapDimensions / 2;
+				return result;
+			}
+
+			if (tMax.x < tMax.y) {
+				if (tMax.x < tMax.z) {
+					// Step X
+					pos.x += iStep.x;
+					tMax.x += delta.x;
+				}
+				else {
+					// Step Z
+					pos.z += iStep.z;
+					tMax.z += delta.z;
+				}
+			}
+			else {
+				if (tMax.y < tMax.z) {
+					// Step Y
+					pos.y += iStep.y;
+					tMax.y += delta.y;
+				}
+				else {
+					// Step Z
+					pos.z += iStep.z;
+					tMax.z += delta.z;
+				}
+			}
+
+			// exit map?? :(
+			if (glm::any(glm::lessThan(pos, Int3(0))) || glm::any(glm::greaterThanEqual(pos, mapDimensions))) {
+				break;
+			}
+		}
+
+		result.t = float(maxDistanceMeters);
+		return result;
+	}
+
+	uint8_t SceneRenderer::sample_shadow_map(Int3 cell)
+	{
+		size_t index = flatten_index_3d(cell, s_ShadowMap->get_dimensions());
+		return s_ShadowMap->m_PixelData[index];
 	}
 
 }

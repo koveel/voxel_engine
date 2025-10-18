@@ -15,6 +15,7 @@ namespace Engine {
 	{
 		uint8_t* voxels = nullptr;
 		uint32_t palette[255]{};
+		uint32_t filled_count = 0;
 	};
 
 	// Generates 8-bit voxel data and corresponding palette
@@ -34,28 +35,30 @@ namespace Engine {
 			uint8_t b = pixels[i + 2];
 			uint8_t a = pixels[i + 3];
 
-			uint8_t& voxel = result.voxels[voxelIndex++];
+			uint8_t& voxel_data = result.voxels[voxelIndex++];
 			if (a == 0) {
-				voxel = 0;
+				voxel_data = 0;
 				continue;
 			}
 
-			uint32_t color = encode_rgba(r, g, b, a);
+			result.filled_count++;
+			uint32_t voxelColor = encode_rgba(a, b, g, r);
 
-			// Try find index of color in palette
+			// SEARCH Try find index of color in palette
 			int32_t colorIndex = -1;
 			for (size_t i = 0; i < paletteIndex; i++)
 			{
-				if (result.palette[i] == color)
+				if (result.palette[i] == voxelColor)
 				{
 					colorIndex = i;
 					break;
 				}
 			}
 
-			voxel = colorIndex > 0 ? colorIndex : paletteIndex;
-			if (colorIndex < 0) {
-				result.palette[paletteIndex++] = color;
+			voxel_data = colorIndex > 0 ? colorIndex : paletteIndex;
+			if (colorIndex == -1) {
+
+				result.palette[paletteIndex++] = voxelColor;
 			}
 		}
 
@@ -88,8 +91,8 @@ namespace Engine {
 			s_MaterialPalette = Texture2D::create(256, 5, TextureFormat::RGBA8);
 
 			// Init default palette
-			uint8_t defaultPalette[256]{};
-			defaultPalette[1] = 255;
+			uint32_t defaultPalette[256]{};
+			defaultPalette[1] = 0xffffffff;
 			s_MaterialPalette->set_data(defaultPalette, 0, 0, 256, 1);
 		}
 		static uint32_t MaterialIndex = 0;
@@ -104,15 +107,19 @@ namespace Engine {
 
 		// Load image
 		Image image = image_load_from_file(filepath, false);
-		uint32_t meshWidth = image.width, meshHeight = sliceCount, meshDepth = image.height / sliceCount;
+		uint32_t meshWidth = image.width;
+		uint32_t meshHeight = sliceCount;
+		uint32_t meshDepth = image.height / sliceCount;
 
 		// Create texture
-		auto& texture = mesh.m_Texture = Texture3D::create(meshWidth, meshHeight, meshDepth, TextureFormat::R8);
+		auto& texture = mesh.m_Texture = Texture3D::create(meshWidth, meshHeight, meshDepth, TextureFormat::R8UI);
+		texture->set_filter_mode(TextureFilterMode::Point);
 		VoxelMeshData voxelData = process_voxel_image_data(image.pixels, meshWidth, meshHeight, meshDepth, image.channels);
+		mesh.m_FilledVoxelCount = voxelData.filled_count;
 
 		// Update palette
 		s_MaterialPalette->set_data(voxelData.palette, 0, mesh.m_MaterialIndex, 0, 1);
-		
+
 		texture->set_data(voxelData.voxels);
 		delete[] voxelData.voxels;
 
