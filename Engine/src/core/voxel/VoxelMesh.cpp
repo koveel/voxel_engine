@@ -82,13 +82,14 @@ namespace Engine {
 		return result;
 	}
 
-	std::unique_ptr<Texture2D> VoxelMesh::s_MaterialPalette;
+	owning_ptr<Texture2D> VoxelMesh::s_MaterialPalette;
 
 	VoxelMesh VoxelMesh::load_from_file(const std::filesystem::path& filepath)
 	{
 		// TODO: store elsewhere
 		if (!s_MaterialPalette) {
-			s_MaterialPalette = Texture2D::create(256, 5, TextureFormat::RGBA8);
+			static constexpr uint32_t PALETTE_MATS_COUNT = 16;
+			s_MaterialPalette = Texture2D::create(256, PALETTE_MATS_COUNT, TextureFormat::RGBA8);
 
 			// Init default palette
 			uint32_t defaultPalette[256]{};

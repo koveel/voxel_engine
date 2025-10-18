@@ -56,7 +56,7 @@ namespace Engine {
 		ASSERT(false);
 	}
 
-	void VertexArray::add_vertex_buffer(std::unique_ptr<VertexBuffer> vbo)
+	void VertexArray::add_vertex_buffer(owning_ptr<VertexBuffer> vbo)
 	{
 		glBindVertexArray(m_ID);
 
@@ -72,7 +72,7 @@ namespace Engine {
 		m_VertexBuffers.push_back(std::move(vbo));
 	}
 
-	void VertexArray::set_index_buffer(std::unique_ptr<IndexBuffer> ibo)
+	void VertexArray::set_index_buffer(owning_ptr<IndexBuffer> ibo)
 	{
 		glVertexArrayElementBuffer(m_ID, ibo->get_handle());
 		m_IndexBuffer = std::move(ibo);
@@ -83,9 +83,9 @@ namespace Engine {
 		glBindVertexArray(m_ID);
 	}
 
-	std::unique_ptr<VertexArray> VertexArray::create()
+	owning_ptr<VertexArray> VertexArray::create()
 	{
-		return std::unique_ptr<VertexArray>(new VertexArray());
+		return owning_ptr<VertexArray>(new VertexArray());
 	}
 
 }

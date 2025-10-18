@@ -49,6 +49,11 @@ namespace Engine {
 		glBindTextureUnit(slot, m_ID);
 	}
 
+	void Texture2D::bind_as_image(uint32_t slot, TextureAccessMode mode) const
+	{
+		glBindImageTexture(slot, m_ID, 0, GL_FALSE, 0, (GLenum)mode, m_InternalFormat);
+	}
+
 	void Texture2D::set_filter_mode(TextureFilterMode mode)
 	{
 		glTextureParameteri(m_ID, GL_TEXTURE_MIN_FILTER, (GLenum)mode);
@@ -100,20 +105,20 @@ namespace Engine {
 		glClearTexImage(m_ID, 0, m_DataFormat, GL_FLOAT, data);
 	}
 
-	std::unique_ptr<Texture2D> Texture2D::load(const std::filesystem::path& filepath)
+	owning_ptr<Texture2D> Texture2D::load(const std::filesystem::path& filepath)
 	{
 		Image image = image_load_from_file(filepath);
 		TextureFormat format = image.channels == 4 ? TextureFormat::RGBA8 : TextureFormat::RGB8;
 		
-		auto result = std::unique_ptr<Texture2D>(new Texture2D(image.width, image.height, format));
+		auto result = owning_ptr<Texture2D>(new Texture2D(image.width, image.height, format));
 		result->set_data(image.pixels);
 
 		return result;
 	}
 
-	std::unique_ptr<Texture2D> Texture2D::create(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips)
+	owning_ptr<Texture2D> Texture2D::create(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips)
 	{
-		return std::unique_ptr<Texture2D>(new Texture2D(width, height, format, mips));
+		return owning_ptr<Texture2D>(new Texture2D(width, height, format, mips));
 	}
 
 	Texture3D::Texture3D(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
@@ -173,9 +178,9 @@ namespace Engine {
 		glBindTextureUnit(slot, m_ID);
 	}
 
-	std::unique_ptr<Texture3D> Texture3D::create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
+	owning_ptr<Texture3D> Texture3D::create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
 	{
-		return std::unique_ptr<Texture3D>(new Texture3D(width, height, depth, format, mips));
+		return owning_ptr<Texture3D>(new Texture3D(width, height, depth, format, mips));
 	}
 
 }

@@ -1,34 +1,22 @@
 #include "pch.h"
 
 #include "Shader.h"
-#include "Pipeline.h"
+#include "RenderPipeline.h"
 #include "Graphics.h"
 
-#include <glad/glad.h>
+namespace Engine {	
 
-namespace Engine {
-
-	Pipeline::~Pipeline()
-	{
-	}
-
-	void Pipeline::begin(const Matrix4& view, const Matrix4& projection)
+	void RenderPipeline::begin(const Matrix4& view, const Matrix4& projection)
 	{
 		m_ViewMatrix = view;
 		m_ProjectionMatrix = projection;
 		m_ViewProjectionMatrix = projection * view;
 	}
 
-	void Pipeline::init_pass(const RenderPass& pass)
+	void RenderPipeline::init_pass(const RenderPass& pass)
 	{
-		//m_Framebuffer->bind();
-		Shader* shader = pass.pShader;
-		if (!shader)
-		{
-			//LOG("expected a shader for render pass");
-			//return;
-		}
-		else {
+		auto shader = pass.pShader;
+		if (shader) {
 			shader->bind();
 			shader->set_matrix("u_ViewProjection", m_ViewProjectionMatrix);
 		}

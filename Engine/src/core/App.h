@@ -40,7 +40,7 @@ namespace Engine {
 
 		static App& get() { return *m_Instance; }
 	private:
-		std::unique_ptr<Window> m_Window;
+		owning_ptr<Window> m_Window;
 
 		float m_DeltaTime = 0.0f, m_ElapsedTime = 0.0f;
 		size_t m_FrameNumber = 0;

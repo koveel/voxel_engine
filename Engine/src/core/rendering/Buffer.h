@@ -79,7 +79,7 @@ namespace Engine {
 
 		uint32_t get_handle() const { return m_ID; }
 
-		static std::unique_ptr<VertexBuffer> create(void* data, uint32_t size);
+		static owning_ptr<VertexBuffer> create(void* data, uint32_t size);
 	private:
 		uint32_t m_ID = 0;
 		VertexBufferLayout m_Layout;
@@ -94,7 +94,7 @@ namespace Engine {
 
 		uint32_t get_handle() const { return m_ID; }
 
-		static std::unique_ptr<IndexBuffer> create(uint32_t* indices, uint32_t count);
+		static owning_ptr<IndexBuffer> create(uint32_t* indices, uint32_t count);
 	private:
 		uint32_t m_ID = 0;
 	};

@@ -29,10 +29,10 @@ namespace Engine {
 		ASSERT(false);
 	}
 	
-	static std::unique_ptr<VertexArray> s_QuadVAO;
-	static std::unique_ptr<VertexArray> s_CubeVAO;
-	static std::unique_ptr<VertexArray> s_SphereVAO;
-	static std::unique_ptr<VertexArray> s_FullscreenTriangleVAO;
+	static owning_ptr<VertexArray> s_QuadVAO;
+	static owning_ptr<VertexArray> s_CubeVAO;
+	static owning_ptr<VertexArray> s_SphereVAO;
+	static owning_ptr<VertexArray> s_FullscreenTriangleVAO;
 
 	static void init_fullscreen_triangle()
 	{
@@ -196,7 +196,7 @@ namespace Engine {
 
 		set_depth_test(DepthTest::Less);
 		glClearDepth(1.0f);
-		glEnable(GL_MULTISAMPLE);
+		//glEnable(GL_MULTISAMPLE);
 
 		set_face_cull(Face::Back);
 		init_quad();
@@ -238,6 +238,11 @@ namespace Engine {
 	void Graphics::set_draw_buffers(uint32_t* buffers, size_t count)
 	{
 		glDrawBuffers(count, buffers);
+	}
+
+	void Graphics::set_blend_function(uint32_t sfactor, uint32_t dfactor)
+	{
+		glBlendFunc(sfactor, dfactor);
 	}
 
 	void Graphics::set_depth_mask(bool mask)
@@ -316,7 +321,7 @@ namespace Engine {
 		draw_indexed(6);
 	}
 
-	void Graphics::draw_fullscreen_triangle(const std::unique_ptr<Shader>& shader)
+	void Graphics::draw_fullscreen_triangle(const owning_ptr<Shader>& shader)
 	{
 		shader->bind();
 		s_FullscreenTriangleVAO->bind();

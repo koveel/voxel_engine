@@ -6,9 +6,7 @@
 #include <bitset>
 #include <array>
 #include <cstdint>
-#include <memory>
 #include <iostream>
-#include <iomanip>
 #include <filesystem>
 
 #include "Logging.h"
@@ -19,3 +17,4 @@
 #include "utils/Color.h"
 #include "utils/Utils.h"
 #include "utils/Transformation.h"
+#include "utils/Memory.h"

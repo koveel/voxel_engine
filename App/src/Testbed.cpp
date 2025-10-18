@@ -4,7 +4,7 @@
 
 #include "rendering/Shader.h"
 #include "rendering/scene/SceneRenderer.h"
-#include "rendering/Pipeline.h"
+#include "rendering/RenderPipeline.h"
 
 #include "windowing/Window.h"
 
@@ -15,43 +15,48 @@ using namespace Engine;
 static Camera camera = Camera(ProjectionType::Perspective);
 static CameraController cameraController;
 
-static std::unique_ptr<Framebuffer> s_Framebuffer;
+//static owning_ptr<Framebuffer> s_Framebuffer;
 
-static std::unique_ptr<Shader> LightShader;
-static std::unique_ptr<Shader> DefaultMeshShader;
-static std::unique_ptr<Shader> CompositeShader;
-static std::unique_ptr<Shader> BlitShader;
-static std::unique_ptr<Shader> Shader_NoFragment;
-static std::unique_ptr<Shader> s_SpriteShader;
-static std::unique_ptr<Shader> s_TextShader;
-static std::unique_ptr<Shader> postprocessShader;
+static RenderPipeline pipeline;
+static RenderPass rp_Geometry;
+static RenderPass rp_Stencil;
+static RenderPass rp_Lighting;
+static RenderPass rp_AmbientOcclusion;
+static RenderPass rp_Composite;
+static RenderPass rp_Blit;
+static RenderPass rp_DebugGeometry;
+static RenderPass rp_ScreenspaceUI;
 
-static Pipeline pipeline;
-static RenderPass geometryPass;
-static RenderPass stencilPass;
-static RenderPass lightPass;
-static RenderPass aoPass;
-static RenderPass compositePass;
-static RenderPass blitPass;
-static RenderPass debug_geo_pass;
-static RenderPass screenspaceUIPass;
+static owning_ptr<Shader> LightShader;
+static owning_ptr<Shader> DefaultMeshShader;
+static owning_ptr<Shader> CompositeShader;
+static owning_ptr<Shader> BlitShader;
+static owning_ptr<Shader> Shader_NoFragment;
+static owning_ptr<Shader> s_SpriteShader;
+static owning_ptr<Shader> s_TextShader;
+static owning_ptr<Shader> postprocessShader;
 
-static std::unique_ptr<Font> s_Font;
+static owning_ptr<ComputeShader> s_Compute;
+
+static owning_ptr<Font> s_Font;
 
 static VoxelEntity gas_tank;
 static VoxelEntity blue_car;
 static VoxelEntity box;
 static VoxelEntity transformer;
 static VoxelEntity miniPole;
+static VoxelEntity chunk;
 
-static std::unique_ptr<Texture2D> blueNoise;
-static std::unique_ptr<Texture2D> crosshair;
+static owning_ptr<Texture2D> blueNoise;
+static owning_ptr<Texture2D> crosshair;
+
+static owning_ptr<Texture2D> s_ComputeImageTarget;
 
 static Matrix4 s_PreviousViewProjection = Matrix4(1.0f);
 
 static const std::vector<VoxelEntity*> ENTITIES_TO_RENDER = {
-	&gas_tank, &transformer,// &miniPole,
-	&box,
+	//&gas_tank, &transformer, &box
+	&chunk,
 };
 
 static void reload_all_shaders()
@@ -65,69 +70,65 @@ static void reload_all_shaders()
 	s_SpriteShader = Shader::create("resources/shaders/SpriteShader.glsl");
 	postprocessShader = Shader::create("resources/shaders/PPShader.glsl");
 	s_TextShader = Shader::create("resources/shaders/TextShader.glsl");
+
+	s_Compute = ComputeShader::create("resources/shaders/compute/ComputeAO.glsl");
 }
 
 static void init_renderpass()
 {
-	geometryPass.pShader = SceneRenderer::s_VoxelMeshShader.get();
-	geometryPass.Depth.Write = true;
+	rp_Geometry.pShader = SceneRenderer::s_VoxelMeshShader.get();
+	rp_Geometry.Depth.Write = true;
 
-	stencilPass.pShader = Shader_NoFragment.get();
-	stencilPass.CullFace = Face::None;
-	stencilPass.Stencil.Mask = 0xff;
-	stencilPass.Stencil.Func = {
+	rp_Stencil.pShader = Shader_NoFragment.get();
+	rp_Stencil.CullFace = Face::None;
+	rp_Stencil.Stencil.Mask = 0xff;
+	rp_Stencil.Stencil.Func = {
 		StencilTest::Always, 0x00, 0x00
 	};
-	stencilPass.Stencil.FaceOp[0] = { true, StencilOp::Keep, StencilOp::IncrementWrap, StencilOp::Keep };
-	stencilPass.Stencil.FaceOp[1] = { true, StencilOp::Keep, StencilOp::DecrementWrap, StencilOp::Keep };
+	rp_Stencil.Stencil.FaceOp[0] = { true, StencilOp::Keep, StencilOp::IncrementWrap, StencilOp::Keep };
+	rp_Stencil.Stencil.FaceOp[1] = { true, StencilOp::Keep, StencilOp::DecrementWrap, StencilOp::Keep };
 
-	lightPass.pShader = LightShader.get();
-	lightPass.Depth.Test = DepthTest::Off;
-	lightPass.CullFace = Face::Front;
-	lightPass.Stencil.Func = { StencilTest::NotEqual, 0x00, 0xff };
-	lightPass.Blend.Enable = true;
+	rp_Lighting.pShader = LightShader.get();
+	rp_Lighting.Depth.Test = DepthTest::Off;
+	rp_Lighting.CullFace = Face::Front;
+	rp_Lighting.Stencil.Func = { StencilTest::NotEqual, 0x00, 0xff };
+	rp_Lighting.Blend.Enable = true;
 
 	// Final
-	aoPass.pShader = postprocessShader.get();
-	aoPass.Depth.Test = DepthTest::Off;
+	rp_AmbientOcclusion.pShader = postprocessShader.get();
+	rp_AmbientOcclusion.Depth.Test = DepthTest::Off;
 
-	compositePass.pShader = CompositeShader.get();
-	compositePass.Depth.Test = DepthTest::Off;
+	rp_Composite.pShader = CompositeShader.get();
+	rp_Composite.Depth.Test = DepthTest::Off;
 
-	blitPass.pShader = BlitShader.get();
-	blitPass.Depth.Test = DepthTest::Off;
+	rp_Blit.pShader = BlitShader.get();
+	rp_Blit.Depth.Test = DepthTest::Off;
 
-	debug_geo_pass.Depth.Test = DepthTest::Off;
-	debug_geo_pass.pShader = DefaultMeshShader.get();
-	debug_geo_pass.CullFace = Face::Front;
-	debug_geo_pass.Blend.Enable = true;
+	rp_DebugGeometry.Depth.Test = DepthTest::Off;
+	rp_DebugGeometry.pShader = DefaultMeshShader.get();
+	rp_DebugGeometry.CullFace = Face::Front;
+	rp_DebugGeometry.Blend.Enable = true;
 
-	screenspaceUIPass.Depth.Test = DepthTest::Off;
-	screenspaceUIPass.Blend.Enable = true;
-	screenspaceUIPass.CullFace = Face::Back;
+	rp_ScreenspaceUI.Depth.Test = DepthTest::Off;
+	rp_ScreenspaceUI.Blend.Enable = true;
+	rp_ScreenspaceUI.CullFace = Face::Back;
 }
 
 static void load_models()
 {
-	gas_tank.Mesh = VoxelMesh::load_from_file("resources/models/gas_tank_22.png");
-	gas_tank.Transform.Position = { 0.0f, 0.0f, 0.0f };
-	gas_tank.Transform.Scale = (Float3)gas_tank.Mesh.m_Texture->get_dimensions() * 0.1f;
+	auto load = [](VoxelEntity& obj, auto path, Float3 pos)
+	{
+		obj.Mesh = VoxelMesh::load_from_file(path);
+		obj.Transform.Position = pos;
+		obj.Transform.Scale = (Float3)obj.Mesh.m_Texture->get_dimensions() * 0.1f;
+	};
 
-	blue_car.Mesh = VoxelMesh::load_from_file("resources/models/blue_car_13.png");
-	blue_car.Transform.Position = { -4.0f, 0.0f, -2.0f };
-	blue_car.Transform.Scale = (Float3)blue_car.Mesh.m_Texture->get_dimensions() * 0.1f;
-
-	box.Mesh = VoxelMesh::load_from_file("resources/models/box_120.png");
-	box.Transform.Position = { 0.0f, 0.0f, 0.0f };
-	box.Transform.Scale = (Float3)box.Mesh.m_Texture->get_dimensions() * 0.1f;
-
-	transformer.Mesh = VoxelMesh::load_from_file("resources/models/transformer_57.png");
-	transformer.Transform.Position = { -5.0f, 1.05f, -4.05f };
-	transformer.Transform.Scale = (Float3)transformer.Mesh.m_Texture->get_dimensions() * 0.1f;
-
-	miniPole.Mesh = VoxelMesh::load_from_file("resources/models/pole_12.png");
-	miniPole.Transform.Position = { -2.5f, 0.0f, -1.8f };
-	miniPole.Transform.Scale = (Float3)miniPole.Mesh.m_Texture->get_dimensions() * 0.1f;
+	load(gas_tank, "resources/models/gas_tank_22.png", {});
+	load(blue_car, "resources/models/blue_car_13.png", { -4.0f, 0.0f, -2.0f });
+	load(box, "resources/models/box_120.png", {});
+	load(transformer, "resources/models/transformer_57.png", { -5.0f, 1.05f, -4.05f });
+	load(miniPole, "resources/models/pole_12.png", { -2.5f, 0.0f, -1.8f });
+	load(chunk, "resources/models/chunk_80.png", { 2.0f, 0.0f, 4.0f });
 }
 
 void testbed_start(App& app)
@@ -138,40 +139,9 @@ void testbed_start(App& app)
 	cameraController.m_TargetPosition = { -3.0f, 0.0f, 0.0f };
 	cameraController.m_TargetEuler = { 0.0f, -90.0f, 0.0f };
 
+	SceneRenderer::init(window->get_width(), window->get_height());
 	reload_all_shaders();
-
-	// FRAMEBUFFER
-	{
-		uint32_t screenWidth = window->get_width();
-		uint32_t screenHeight = window->get_height();
-
-		FramebufferDescriptor descriptor;
-		descriptor.ColorAttachments = {
-			{ screenWidth, screenHeight, TextureFormat::RGBA8 }, // albedo
-			{ screenWidth, screenHeight, TextureFormat::RGB8S }, // normal
-
-			{ screenWidth, screenHeight, TextureFormat::RGB8S, false }, // normal last frame
-			{ screenWidth, screenHeight, TextureFormat::R8, false }, // AO accumulation tex 1
-			{ screenWidth, screenHeight, TextureFormat::R8, false }, // AO accumulation tex 2
-			{ screenWidth, screenHeight, TextureFormat::R16, false }, // depth last frame
-
-			{ screenWidth, screenHeight, TextureFormat::RGBA8 }, // lighting
-		};
-		FramebufferDescriptor::DepthStencilAttachment depthStencilAttachment = {
-			screenWidth, screenHeight, 24, true
-		};
-		descriptor.pDepthStencilAttachment = &depthStencilAttachment;
-
-		s_Framebuffer = Framebuffer::create(descriptor);
-		s_Framebuffer->bind();
-
-		float v = 1.0f;
-		s_Framebuffer->m_ColorAttachments[3]->clear_to(&v);
-		s_Framebuffer->m_ColorAttachments[4]->clear_to(&v);
-	}
-
 	init_renderpass();
-
 	load_models();
 
 	blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
@@ -181,6 +151,8 @@ void testbed_start(App& app)
 	crosshair = Texture2D::load("resources/textures/crosshair0.png");
 	crosshair->set_wrap_mode(TextureWrapMode::Clamp);
 	crosshair->set_filter_mode(TextureFilterMode::Linear);
+
+	s_ComputeImageTarget = Texture2D::create(window->get_width(), window->get_height(), TextureFormat::RGBA8);
 
 	s_Font = Font::load_from_file("resources/fonts/Raleway-Regular.ttf");
 }
@@ -194,13 +166,12 @@ void testbed_update(App& app)
 
 	cameraController.update(deltaTime);
 
-	// Clear
-	s_Framebuffer->clear({ 0.0f });
-
 	Matrix4 view = cameraController.get_view();
 	Matrix4 projection = camera.get_projection();
 	pipeline.begin(view, projection);
-	SceneRenderer::begin_frame(camera, cameraController.get_transform());	
+
+	SceneRenderer::begin_frame(camera, cameraController.get_transform());
+	auto& framebuffer = SceneRenderer::s_Framebuffer;
 
 	if (Input::was_key_pressed(Key::R) || frameNumber == 0) {
 		SceneRenderer::generate_shadow_map(ENTITIES_TO_RENDER);
@@ -226,22 +197,18 @@ void testbed_update(App& app)
 	}
 
 	// GEOMETRY PASS
-	pipeline.submit_pass(geometryPass, [&]()
+	pipeline.submit_pass(rp_Geometry, [&]()
 	{
-		static bool show_shadow_map = false;
-		if (Input::was_key_pressed(Key::M)) show_shadow_map = !show_shadow_map;
-		if (show_shadow_map)
-			SceneRenderer::draw_shadow_map();
+		rp_Geometry.pShader->set_float3("u_CameraPosition", cameraController.get_transform().Position);
 
-		for (auto e : ENTITIES_TO_RENDER)
-			SceneRenderer::draw_voxel_entity(*e);
+		SceneRenderer::draw_entities(ENTITIES_TO_RENDER);
 	});
 
-	static Float3 lightPos = { -2.0f, 0.0f, -2.0f };
+	static Float3 lightPos = { -1.0f, 6.0f, 1.0f };
 	// LIGHTING SHT
-	if (false)
+	//if (false)
 	{
-		static float radius = 4.0f;
+		static float radius = 8.0f;
 
 		{
 			if (Input::is_key_down(Key::UpArrow))
@@ -259,7 +226,7 @@ void testbed_update(App& app)
 		static float intensity = 1.0f;
 
 		// STENCIL PASS
-		pipeline.submit_pass(stencilPass, [&]()
+		pipeline.submit_pass(rp_Stencil, [&]()
 		{
 			Graphics::reset_draw_buffers();
 
@@ -268,22 +235,18 @@ void testbed_update(App& app)
 			Graphics::draw_sphere(); // lighting volume mesh
 		});
 
-		s_Framebuffer->bind(); // stencil pass fucks up the draw buffers
+		framebuffer->bind(); // fix draw buffers
 
 		// LIGHT PASS
-		pipeline.submit_pass(lightPass, [&]()
-		{
-			//glBlendFunc(GL_ONE, GL_ONE);
+		pipeline.submit_pass(rp_Lighting, [&]()
+		{ 
+			Graphics::set_blend_function(1, 1); // GL_ONE = 1 = mindblown
 
 			// Matrices
 			LightShader->set_matrix("u_Transformation", lightTransformation);
 			LightShader->set_matrix("u_InverseView", glm::inverse(view));
 			LightShader->set_matrix("u_InverseProjection", glm::inverse(projection));
 
-			// Light params
-			//LightShader->set_float("AttConst", attConst);
-			//LightShader->set_float("AttLinear", attLinear);
-			//LightShader->set_float("AttExp", attExp);
 			LightShader->set_float("u_LightIntensity", intensity);
 			LightShader->set_float("u_LightRadius", radius);
 
@@ -292,16 +255,18 @@ void testbed_update(App& app)
 			LightShader->set_float3("u_VolumeCenter", lightPos);
 			LightShader->set_float2("u_ViewportDims", { window->get_width(), window->get_height() });
 			LightShader->set_int("u_FrameNumber", frameNumber);
-			s_Framebuffer->m_DepthStencilAttachment->bind(0);
-			s_Framebuffer->m_ColorAttachments[1]->bind(2);
+			framebuffer->m_DepthStencilAttachment->bind(0);
+			framebuffer->m_ColorAttachments[1]->bind(2);
 
 			Graphics::draw_sphere(); // lighting volume mesh
 		});
 	}
 
+	Graphics::set_blend_function(0x0302, 0x0303);
+
 	Texture2D* ao_read_texture = nullptr, * ao_write_texture = nullptr;
 	// AO PASS
-	pipeline.submit_pass(aoPass, [&]()
+	pipeline.submit_pass(rp_AmbientOcclusion, [&]()
 	{
 		// HANDLE AO PING PONG
 		{
@@ -309,23 +274,23 @@ void testbed_update(App& app)
 			uint32_t writeIndex = 1 - readIndex;
 
 			const uint32_t aoIndex = 3;
-			uint32_t fbo = s_Framebuffer->get_handle();
-			const auto& read = s_Framebuffer->m_ColorAttachments[aoIndex + readIndex];
-			const auto& write = s_Framebuffer->m_ColorAttachments[aoIndex + writeIndex];
-			s_Framebuffer->set_index_handle(3, write->get_handle());
+			uint32_t fbo = framebuffer->get_handle();
+			const auto& read = framebuffer->m_ColorAttachments[aoIndex + readIndex];
+			const auto& write = framebuffer->m_ColorAttachments[aoIndex + writeIndex];
+			framebuffer->set_index_handle(3, write->get_handle());
 
 			ao_read_texture = read.get();
 			ao_write_texture = write.get();
 			read->bind(6);
 		}
 
-		s_Framebuffer->m_DepthStencilAttachment->bind(0);
+		framebuffer->m_DepthStencilAttachment->bind(0);
 		SceneRenderer::get_shadow_map()->bind(1);
-		s_Framebuffer->m_ColorAttachments[5]->bind(2);
+		framebuffer->m_ColorAttachments[5]->bind(2);
 
-		s_Framebuffer->m_ColorAttachments[0]->bind(3);
-		s_Framebuffer->m_ColorAttachments[1]->bind(4);
-		s_Framebuffer->m_ColorAttachments[2]->bind(5);
+		framebuffer->m_ColorAttachments[0]->bind(3);
+		framebuffer->m_ColorAttachments[1]->bind(4);
+		framebuffer->m_ColorAttachments[2]->bind(5);
 		blueNoise->bind(9);
 
 		postprocessShader->set_float("u_Time", elapsedTime);
@@ -339,21 +304,34 @@ void testbed_update(App& app)
 	});
 
 	// BLIT A BIT O DAT SHIT
-	pipeline.submit_pass(blitPass, [&]()
+	pipeline.submit_pass(rp_Blit, [&]()
 	{
-		s_Framebuffer->m_DepthStencilAttachment->bind(0);
-		s_Framebuffer->m_ColorAttachments[1]->bind(1);
+		framebuffer->m_DepthStencilAttachment->bind(0);
+		framebuffer->m_ColorAttachments[1]->bind(1);
 		Graphics::draw_fullscreen_triangle(BlitShader);
 	});
 
+	Float2 viewport = { (float)window->get_width(), (float)window->get_height() };
+
+	// COMPUTE
+	{
+		s_ComputeImageTarget->bind_as_image(0, TextureAccessMode::Write);
+		uint32_t localSizeX = 16, localSizeY = 16;
+		s_Compute->dispatch(
+			(viewport.x + localSizeX - 1) / localSizeX,
+			(viewport.y + localSizeY - 1) / localSizeY
+		);
+	}
+
 	// READS AO ACCUM
-	pipeline.submit_pass(compositePass, [&]()
+	pipeline.submit_pass(rp_Composite, [&]()
 	{
 		Framebuffer::unbind();
-		s_Framebuffer->m_ColorAttachments[0]->bind(0);
-		s_Framebuffer->m_ColorAttachments[1]->bind(1);
+		framebuffer->m_ColorAttachments[0]->bind(0);
+		framebuffer->m_ColorAttachments[1]->bind(1);
 		ao_write_texture->bind(2);
-		s_Framebuffer->m_ColorAttachments[6]->bind(3);
+		framebuffer->m_ColorAttachments[6]->bind(3);
+		s_ComputeImageTarget->bind(4);
 
 		static int shaderOutputColor = 0;
 		if (Input::was_key_pressed(Key::A_1)) shaderOutputColor = 0;
@@ -367,9 +345,9 @@ void testbed_update(App& app)
 
 		Graphics::draw_fullscreen_triangle(CompositeShader);
 	});
+	return;
 
-	Float2 viewport = { (float)window->get_width(), (float)window->get_height() };
-	pipeline.submit_pass(debug_geo_pass, [&]()
+	pipeline.submit_pass(rp_DebugGeometry, [&]()
 	{
 		Framebuffer::unbind();
 
@@ -380,27 +358,35 @@ void testbed_update(App& app)
 		DefaultMeshShader->set_float4("u_Color", { 1.0f, 1.0f, 1.0f, 0.4f });
 		DefaultMeshShader->set_matrix("u_Transformation", debuglighttransform);
 		DefaultMeshShader->set_float2("u_ViewportDims", viewport);
-		s_Framebuffer->m_DepthStencilAttachment->bind(0);
+		framebuffer->m_DepthStencilAttachment->bind(0);
 
 		Graphics::draw_cube();
 	});
 
 	Matrix4 pixelProjection = glm::ortho(0.0f, viewport.x, 0.0f, viewport.y, -1.0f, 1.0f);
-	pipeline.submit_pass(screenspaceUIPass, [&]()
+	pipeline.submit_pass(rp_ScreenspaceUI, [&]()
 	{
+		// debug text
 		s_TextShader->bind();
 		s_TextShader->set_matrix("u_ViewProjection", pixelProjection);
 		{
 			s_TextShader->set_matrix("u_Transformation",
 				Transformation({ 25.0f, viewport.y - 80.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
-			Graphics::draw_text(std::format("ms: {}", deltaTime * 1000.0f), s_Font);
+			Graphics::draw_text(std::format("ms: {:.3f}", deltaTime * 1000.0f), s_Font);
 		}
 		{
 			s_TextShader->set_matrix("u_Transformation",
-				Transformation({ 25.0f, viewport.y - 165.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
-			Graphics::draw_text(std::format("fps: {}", 1.0f / deltaTime), s_Font);
+				Transformation({ 25.0f, viewport.y - 160.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
+			Graphics::draw_text(std::format("fps: {:.2f}", 1.0f / deltaTime), s_Font);
+		}
+		{
+			Float3 cam = (cameraController.get_transform().Position * 0.001f) * 1000.0f;
+			s_TextShader->set_matrix("u_Transformation",
+				Transformation({ 25.0f, viewport.y - 240.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
+			Graphics::draw_text(std::format("({:.2f}, {:.2f}, {:.2f})", cam.x, cam.y, cam.z), s_Font);
 		}
 
+		// crosshair idfk
 		s_SpriteShader->bind();
 		s_SpriteShader->set_float4("u_Tint", { 0.0f, 0.0f, 0.0f, 1.0f });
 		crosshair->bind(0);
@@ -411,10 +397,9 @@ void testbed_update(App& app)
 			{ 100.0f, 100.0f, 1.0f }).get_transform();
 		s_SpriteShader->set_matrix("u_Transformation", transform);
 		Graphics::draw_quad();
-	});
+	});	
 
 	s_PreviousViewProjection = pipeline.m_ViewProjectionMatrix;
-	frameNumber++;
 }
 
 void testbed_stop(App& app)
@@ -424,7 +409,7 @@ void testbed_stop(App& app)
 
 void testbed_window_resized(WindowResizeEvent& e)
 {
-	s_Framebuffer->resize(e.width, e.height);
+	SceneRenderer::s_Framebuffer->resize(e.width, e.height);
 	camera.set_aspect_ratio((float)e.width / (float)e.height);
 }
 

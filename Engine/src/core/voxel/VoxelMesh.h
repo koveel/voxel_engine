@@ -14,8 +14,8 @@ namespace Engine {
 
 		uint32_t m_MaterialIndex = 0;
 
-		std::unique_ptr<Texture3D> m_Texture;
-		static std::unique_ptr<Texture2D> s_MaterialPalette;
+		owning_ptr<Texture3D> m_Texture;
+		static owning_ptr<Texture2D> s_MaterialPalette;
 	private:
 		uint32_t m_FilledVoxelCount = 0;
 	};

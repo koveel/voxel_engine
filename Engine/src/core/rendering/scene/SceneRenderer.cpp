@@ -6,22 +6,56 @@
 
 #include "SceneRenderer.h"
 
-#include "math/Math.h"
-#include <glm/gtx/matrix_decompose.hpp>
-
 namespace Engine {
 
-	std::unique_ptr<Texture3D> SceneRenderer::s_ShadowMap;
-	Float3 SceneRenderer::s_CameraPosition = Float3(0.0f);
+	owning_ptr<Texture3D> SceneRenderer::s_ShadowMap;
+	owning_ptr<Shader> SceneRenderer::s_VoxelMeshShader;
+	owning_ptr<Framebuffer> SceneRenderer::s_Framebuffer;
+
 	Matrix4 SceneRenderer::s_View = Matrix4(1.0f);
 	Matrix4 SceneRenderer::s_Projection = Matrix4(1.0f);
-	std::unique_ptr<Shader> SceneRenderer::s_VoxelMeshShader;
+
+	void SceneRenderer::init(uint32_t screen_width, uint32_t screen_height)
+	{
+		// Create framebuffer
+		FramebufferDescriptor descriptor;
+		descriptor.ColorAttachments = {
+			{ screen_width, screen_height, TextureFormat::RGBA8 }, // albedo
+			{ screen_width, screen_height, TextureFormat::RGB8S }, // normal
+
+			{ screen_width, screen_height, TextureFormat::RGB8S, false }, // normal last frame
+			{ screen_width, screen_height, TextureFormat::R8, false }, // AO accumulation tex 1
+			{ screen_width, screen_height, TextureFormat::R8, false }, // AO accumulation tex 2
+			{ screen_width, screen_height, TextureFormat::R16, false }, // depth last frame
+
+			{ screen_width, screen_height, TextureFormat::RGBA8 }, // lighting
+		};
+		FramebufferDescriptor::DepthStencilAttachment depthStencilAttachment = {
+			screen_width, screen_height, 24, true
+		};
+		descriptor.pDepthStencilAttachment = &depthStencilAttachment;
+
+		s_Framebuffer = Framebuffer::create(descriptor);
+
+		// clear taa
+		float v = 1.0f;
+		s_Framebuffer->m_ColorAttachments[3]->clear_to(&v);
+		s_Framebuffer->m_ColorAttachments[4]->clear_to(&v);
+	}
 
 	void SceneRenderer::begin_frame(const Camera& camera, const Transformation& transform)
 	{
 		s_View = glm::inverse(transform.get_transform());
-		s_CameraPosition = transform.Position;
 		s_Projection = camera.get_projection();
+
+		s_Framebuffer->bind();
+		s_Framebuffer->clear({ 0.0f });
+	}
+
+	void SceneRenderer::draw_entities(const std::vector<VoxelEntity*>& entities)
+	{
+		for (auto& e : entities)
+			draw_voxel_entity(*e);
 	}
 
 	static constexpr float VoxelScaleMeters = 0.1f;
@@ -41,7 +75,6 @@ namespace Engine {
 		s_VoxelMeshShader->set_float3("u_OBBCenter", transform.Position);
 		s_VoxelMeshShader->set_matrix("u_OBBOrientation", glm::inverse(rotation));
 
-		s_VoxelMeshShader->set_float3("u_CameraPosition", s_CameraPosition);
 		s_VoxelMeshShader->set_matrix("u_Transformation", transformation);
 
 		texture->bind();
@@ -63,7 +96,6 @@ namespace Engine {
 		s_VoxelMeshShader->set_int3("u_VoxelDimensions", voxelDimensions);
 		s_VoxelMeshShader->set_int("u_MaterialIndex", 0);
 
-		s_VoxelMeshShader->set_float3("u_CameraPosition", s_CameraPosition);
 		s_VoxelMeshShader->set_matrix("u_Transformation", transformation);
 
 		texture->bind();

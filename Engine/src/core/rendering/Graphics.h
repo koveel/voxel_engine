@@ -34,13 +34,6 @@ namespace Engine {
 		DecrementWrap = 0X8508,
 	};
 
-	//enum class ClearTarget
-	//{
-	//	Color = 0x00004000,
-	//	Depth = 0x00000100,
-	//	Stencil = 0x00000400,
-	//};
-
 	class Graphics
 	{
 	public:
@@ -65,11 +58,13 @@ namespace Engine {
 		static void reset_draw_buffers(); // set to GL_NONE
 		static void set_draw_buffers(uint32_t* buffers, size_t count);
 
+		static void set_blend_function(uint32_t sfactor, uint32_t dfactor);
+
 		static void draw_cube();
 		static void draw_sphere();
 		static void draw_quad();
-		static void draw_fullscreen_triangle(const std::unique_ptr<class Shader>& shader);
-		static void draw_text(const std::string& text, const std::unique_ptr<class Font>& font, float tracking = 0.0f);
+		static void draw_fullscreen_triangle(const owning_ptr<class Shader>& shader);
+		static void draw_text(const std::string& text, const owning_ptr<class Font>& font, float tracking = 0.0f);
 
 		static void resize_viewport(uint32_t x, uint32_t y);
 	};

@@ -21,9 +21,9 @@ namespace Engine {
 		glNamedBufferSubData(m_ID, offset, size, data);
 	}
 
-	std::unique_ptr<VertexBuffer> VertexBuffer::create(void* data, uint32_t size)
+	owning_ptr<VertexBuffer> VertexBuffer::create(void* data, uint32_t size)
 	{
-		return std::unique_ptr<VertexBuffer>(new VertexBuffer(data, size));
+		return owning_ptr<VertexBuffer>(new VertexBuffer(data, size));
 	}
 
 	IndexBuffer::IndexBuffer(uint32_t* indices, uint32_t count)
@@ -37,9 +37,9 @@ namespace Engine {
 		glDeleteBuffers(1, &m_ID);
 	}
 
-	std::unique_ptr<IndexBuffer> IndexBuffer::create(uint32_t* indices, uint32_t count)
+	owning_ptr<IndexBuffer> IndexBuffer::create(uint32_t* indices, uint32_t count)
 	{
-		return std::unique_ptr<IndexBuffer>(new IndexBuffer(indices, count));
+		return owning_ptr<IndexBuffer>(new IndexBuffer(indices, count));
 	}
 
 }

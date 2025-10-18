@@ -23,7 +23,7 @@ namespace Engine {
 	static TextVertex* s_VertexData = nullptr;
 	static TextVertex* s_CurrentVertex = nullptr;
 
-	static std::unique_ptr<VertexArray> s_TextVAO;
+	static owning_ptr<VertexArray> s_TextVAO;
 	static VertexBuffer* s_TextVBO;
 
 	void init_text()
@@ -60,7 +60,7 @@ namespace Engine {
 		//s_TextShader = Shader::create("resources/shaders/TextShader.glsl");
 	}
 
-	void Graphics::draw_text(const std::string& text, const std::unique_ptr<class Font>& pFont, float tracking)
+	void Graphics::draw_text(const std::string& text, const owning_ptr<class Font>& pFont, float tracking)
 	{
 		Font& font = *pFont;
 		

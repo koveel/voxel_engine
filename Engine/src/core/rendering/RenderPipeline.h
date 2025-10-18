@@ -11,6 +11,8 @@ namespace Engine {
 		Matrix4 ViewMatrix;
 		Matrix4 ProjectionMatrix;
 
+		Shader* pShader = nullptr;
+
 		// Culling, depth & stencil testing
 		Face CullFace = Face::Back;
 		struct
@@ -44,15 +46,11 @@ namespace Engine {
 			bool Enable = false;
 			uint32_t SFactor = 0, DFactor = 0;
 		} Blend;
-		class Shader* pShader = nullptr; // TODO: use shared_ptr instead or sm shit
 	};
 
-	class Pipeline
+	class RenderPipeline
 	{
 	public:
-		Pipeline() = default;
-		~Pipeline();
-
 		void begin(const Matrix4& view, const Matrix4& projection);
 
 		template<typename F>
@@ -65,7 +63,6 @@ namespace Engine {
 		void init_pass(const RenderPass& pass);
 	public:
 		Matrix4 m_ViewMatrix = Matrix4(1.0f), m_ProjectionMatrix = Matrix4(1.0f), m_ViewProjectionMatrix = Matrix4(1.0f);
-		std::unique_ptr<Framebuffer> m_Framebuffer;
 	};
 
 }

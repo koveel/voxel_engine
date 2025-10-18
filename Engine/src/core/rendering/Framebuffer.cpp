@@ -16,7 +16,7 @@ namespace Engine {
 
 		for (const FramebufferDescriptor::ColorAttachment& attachment : descriptor.ColorAttachments)
 		{
-			std::unique_ptr<Texture2D> texture = Texture2D::create(attachment.Width, attachment.Height, attachment.Format);
+			owning_ptr<Texture2D> texture = Texture2D::create(attachment.Width, attachment.Height, attachment.Format);
 
 			uint32_t glAttachment = GL_COLOR_ATTACHMENT0 + attachmentIndex;
 			glNamedFramebufferTexture(m_ID, glAttachment, texture->get_handle(), 0);
@@ -43,7 +43,7 @@ namespace Engine {
 			default: ASSERT(false);
 			}
 
-			std::unique_ptr<Texture2D> texture = Texture2D::create(pDepthStencil->Width, pDepthStencil->Height, format);
+			owning_ptr<Texture2D> texture = Texture2D::create(pDepthStencil->Width, pDepthStencil->Height, format);
 			glNamedFramebufferTexture(m_ID, pDepthStencil->Stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, texture->get_handle(), 0);
 
 			m_DepthStencilAttachment = std::move(texture);
@@ -80,7 +80,7 @@ namespace Engine {
 		// Recreate attachments
 		for (uint32_t attachment = 0; attachment < m_ColorAttachments.size(); attachment++)
 		{
-			const std::unique_ptr<Texture2D>& texture = m_ColorAttachments[attachment];
+			const owning_ptr<Texture2D>& texture = m_ColorAttachments[attachment];
 			m_ColorAttachments[attachment] = Texture2D::create(width, height, texture->get_format());
 			glNamedFramebufferTexture(m_ID, GL_COLOR_ATTACHMENT0 + attachment, m_ColorAttachments[attachment]->get_handle(), 0);
 		}
@@ -90,7 +90,7 @@ namespace Engine {
 			TextureFormat format = m_DepthStencilAttachment->get_format();
 			bool hasStencil = format == TextureFormat::Depth24Stencil8;
 
-			const std::unique_ptr<Texture2D>& texture = m_DepthStencilAttachment;
+			const owning_ptr<Texture2D>& texture = m_DepthStencilAttachment;
 			m_DepthStencilAttachment = Texture2D::create(width, height, format);
 			glNamedFramebufferTexture(m_ID, hasStencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, m_DepthStencilAttachment->get_handle(), 0);
 		}
@@ -106,9 +106,9 @@ namespace Engine {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 
-	std::unique_ptr<Framebuffer> Framebuffer::create(const FramebufferDescriptor& descriptor)
+	owning_ptr<Framebuffer> Framebuffer::create(const FramebufferDescriptor& descriptor)
 	{
-		return std::unique_ptr<Framebuffer>(new Framebuffer(descriptor));
+		return owning_ptr<Framebuffer>(new Framebuffer(descriptor));
 	}
 
 }

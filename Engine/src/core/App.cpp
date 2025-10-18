@@ -3,18 +3,7 @@
 #include "windowing/Window.h"
 #include "App.h"
 
-#include "rendering/VertexArray.h"
-#include "rendering/Shader.h"
-#include "rendering/Pipeline.h"
-
-#include "utils/CameraController.h"
-#include "voxel/VoxelMesh.h"
-#include <glad/glad.h>
-
-#include "gui/Font.h"
-
-#include "voxel/VoxelEntity.h"
-#include "rendering/scene/SceneRenderer.h"
+#include "rendering/Graphics.h"
 
 namespace Engine {
 
@@ -26,7 +15,7 @@ namespace Engine {
 
 		m_Instance = this;
 
-		m_Window = std::make_unique<Window>(window_name, window_width, window_height);
+		m_Window = make_owning<Window>(window_name, window_width, window_height);
 	}
 
 	App::~App()

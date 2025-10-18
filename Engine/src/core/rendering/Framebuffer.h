@@ -39,7 +39,7 @@ namespace Engine {
 		uint32_t get_handle() const { return m_ID; }
 
 		static void unbind();
-		static std::unique_ptr<Framebuffer> create(const FramebufferDescriptor& descriptor);
+		static owning_ptr<Framebuffer> create(const FramebufferDescriptor& descriptor);
 	private:
 		uint32_t m_ID = 0;
 	public:
@@ -49,8 +49,8 @@ namespace Engine {
 		uint32_t m_ClearBuffers[8]{};
 		uint32_t m_ClearBuffersCount = 0;
 
-		std::vector<std::unique_ptr<Texture2D>> m_ColorAttachments;
-		std::unique_ptr<Texture2D> m_DepthStencilAttachment;
+		std::vector<owning_ptr<Texture2D>> m_ColorAttachments;
+		owning_ptr<Texture2D> m_DepthStencilAttachment;
 	};
 
 }

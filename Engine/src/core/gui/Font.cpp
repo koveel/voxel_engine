@@ -13,7 +13,7 @@ namespace Engine {
 
 	// Thanks Cherno!!
 	template<typename T, typename S, int N, msdf_atlas::GeneratorFunction<S, N> GenFn>
-	static std::unique_ptr<Texture2D> create_atlas(
+	static owning_ptr<Texture2D> create_atlas(
 		const std::filesystem::path& savePath,
 		float fontSize, uint32_t atlasWidth, uint32_t atlasHeight,
 		const std::vector<msdf_atlas::GlyphGeometry>& glyphs, const msdf_atlas::FontGeometry& geometry)
@@ -43,9 +43,9 @@ namespace Engine {
 
 	}
 
-	std::unique_ptr<Font> Font::load_from_file(const std::filesystem::path& path)
+	owning_ptr<Font> Font::load_from_file(const std::filesystem::path& path)
 	{
-		auto result = std::unique_ptr<Font>(new Font());
+		auto result = owning_ptr<Font>(new Font());
 		result->m_Data = new MSDFData();
 		MSDFData* msdfData = result->m_Data;
 

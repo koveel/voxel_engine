@@ -35,6 +35,13 @@ namespace Engine {
 		Clamp = 0x812F,
 	};
 
+	enum class TextureAccessMode
+	{
+		Read = 0x88B8,
+		Write = 0x88B9,
+		ReadWrite = 0x88BA,
+	};
+
 	class Texture2D
 	{
 	private:
@@ -53,12 +60,13 @@ namespace Engine {
 		Int2 get_dimensions() const { return Int2(m_Width, m_Height); }
 
 		void bind(uint32_t slot = 0) const;
+		void bind_as_image(uint32_t slot, TextureAccessMode mode) const;
 		uint32_t get_handle() const { return m_ID; }
 		
 		TextureFormat get_format() const { return (TextureFormat)m_InternalFormat; }
 
-		static std::unique_ptr<Texture2D> load(const std::filesystem::path& filepath);
-		static std::unique_ptr<Texture2D> create(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips = 1);
+		static owning_ptr<Texture2D> load(const std::filesystem::path& filepath);
+		static owning_ptr<Texture2D> create(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips = 1);
 	private:
 		uint32_t m_ID = 0;
 		uint32_t m_Width = 0, m_Height = 0;
@@ -87,7 +95,7 @@ namespace Engine {
 		void bind(uint32_t slot = 0) const;
 		uint32_t get_handle() const { return m_ID; }
 
-		static std::unique_ptr<Texture3D> create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips = 1);
+		static owning_ptr<Texture3D> create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips = 1);
 
 		uint8_t* m_PixelData = nullptr; // move
 	private:
