@@ -241,6 +241,21 @@ void testbed_update(App& app)
 
 	handle_scene_view_ray_trace(cameraController.get_transform());
 
+	static Float3 noiseOffset = {};
+	Float3 lastNoiseOffset = noiseOffset;
+	if (Input::is_key_down(Key::UpArrow))
+		noiseOffset.z += 3.0f * deltaTime;
+	if (Input::is_key_down(Key::DownArrow))
+		noiseOffset.z -= 3.0f * deltaTime;
+	if (Input::is_key_down(Key::LeftArrow))
+		noiseOffset.x -= 3.0f * deltaTime;
+	if (Input::is_key_down(Key::RightArrow))
+		noiseOffset.x += 3.0f * deltaTime;
+	if (lastNoiseOffset != noiseOffset)
+	{
+		s_TerrainGen->regenerate_chunk(simplex_chunk, noiseOffset);
+	}
+
 	// GEOMETRY PASS
 	renderPipeline.submit_pass(rp_Geometry, [&]()
 	{

@@ -184,9 +184,6 @@ vec2 GetScreenSpaceMotionVector(vec3 worldPos)
 
 void main()
 {
-	//uvec2 group = gl_WorkGroupID.xy;
-	//uvec2 local = gl_LocalInvocationID.xy;
-
 	ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 	vec2 viewport = vec2(imageSize(u_Output));
 	vec2 uv = (vec2(pixel) + 0.5f) / viewport;

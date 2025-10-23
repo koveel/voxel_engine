@@ -29,6 +29,7 @@ namespace Engine {
 		TerrainGenerator();
 
 		VoxelMesh generate_chunk();
+		void regenerate_chunk(VoxelMesh& mesh, Float3 noiseOffset);
 		VoxelMesh generate_terrain(const TerrainGenerationParameters& params);
 	public:
 		owning_ptr<ShaderStorageBuffer> m_HeightMapSSBO;
