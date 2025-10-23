@@ -8,16 +8,18 @@
 
 #include "windowing/Window.h"
 
-#include "gui/Font.h"
+#include "voxel/Terrain.h"
 
+#include "gui/Font.h"
+ 
 using namespace Engine;
 
 static Camera camera = Camera(ProjectionType::Perspective);
 static CameraController cameraController;
 
-//static owning_ptr<Framebuffer> s_Framebuffer;
+static owning_ptr<Framebuffer> s_Framebuffer;
 
-static RenderPipeline pipeline;
+static RenderPipeline renderPipeline;
 static RenderPass rp_Geometry;
 static RenderPass rp_Stencil;
 static RenderPass rp_Lighting;
@@ -32,11 +34,11 @@ static owning_ptr<Shader> DefaultMeshShader;
 static owning_ptr<Shader> CompositeShader;
 static owning_ptr<Shader> BlitShader;
 static owning_ptr<Shader> Shader_NoFragment;
-static owning_ptr<Shader> s_SpriteShader;
-static owning_ptr<Shader> s_TextShader;
-static owning_ptr<Shader> postprocessShader;
+static owning_ptr<Shader> SpriteShader;
+static owning_ptr<Shader> TextShader;
 
-static owning_ptr<ComputeShader> s_Compute;
+static owning_ptr<ComputeShader> ComputeAOShader;
+static owning_ptr<ComputeShader> ComputeSSAOShader;
 
 static owning_ptr<Font> s_Font;
 
@@ -49,29 +51,89 @@ static VoxelEntity chunk;
 
 static owning_ptr<Texture2D> blueNoise;
 static owning_ptr<Texture2D> crosshair;
+static owning_ptr<Texture2D> testTexture;
 
-static owning_ptr<Texture2D> s_ComputeImageTarget;
+static VoxelEntity simplex_chunk;
 
 static Matrix4 s_PreviousViewProjection = Matrix4(1.0f);
 
 static const std::vector<VoxelEntity*> ENTITIES_TO_RENDER = {
-	//&gas_tank, &transformer, &box
-	&chunk,
+	&simplex_chunk
 };
+
+static Terrain::GenerationParameters s_TerrainParams =
+{
+	.noise = {
+		.amplitude = 2.0f,
+		.frequency = 0.5f,
+		.lacunarity = 2.0f,
+		.persistence = 0.7f,
+		.octaves = 4
+	},
+	.width = 8192,
+	.height = 16,
+};
+
+static void generate_terrain()
+{
+	auto& noise = s_TerrainParams.noise;
+	noise.amplitude = glm::clamp(noise.amplitude, 0.1f, 2.0f);
+	noise.frequency = glm::clamp(noise.frequency, 0.1f, 2.0f);
+	noise.lacunarity = glm::clamp(noise.lacunarity, 0.1f, 4.0f);
+	noise.persistence = glm::clamp(noise.persistence, 0.1f, 4.0f);
+	noise.octaves = glm::clamp(noise.octaves, 1u, 6u);
+
+	simplex_chunk.Mesh = Terrain::generate_terrain(s_TerrainParams);
+	simplex_chunk.Transform.Scale = (Float3)simplex_chunk.Mesh.m_Texture->get_dimensions() * 0.1f;
+}
+
+static void create_framebuffer(uint32_t screen_width, uint32_t screen_height)
+{
+	// Create framebuffer
+	FramebufferDescriptor descriptor;
+	descriptor.ColorAttachments = {
+		{ screen_width, screen_height, TextureFormat::RGBA8 }, // albedo
+		{ screen_width, screen_height, TextureFormat::RGB8S }, // normal
+
+		{ screen_width, screen_height, TextureFormat::RGB8S, false }, // normal last frame
+		{ screen_width, screen_height, TextureFormat::R8, false }, // AO accumulation tex 1
+		{ screen_width, screen_height, TextureFormat::R8, false }, // AO accumulation tex 2
+		{ screen_width, screen_height, TextureFormat::R16, false }, // depth last frame
+
+		{ screen_width, screen_height, TextureFormat::RGBA8 }, // lighting
+	};
+	FramebufferDescriptor::DepthStencilAttachment depthStencilAttachment = {
+		screen_width, screen_height, 24, true
+	};
+	descriptor.pDepthStencilAttachment = &depthStencilAttachment;
+
+	s_Framebuffer = Framebuffer::create(descriptor);
+
+	// clear taa
+	float v = 1.0f;
+	s_Framebuffer->m_ColorAttachments[3]->clear_to(&v);
+	s_Framebuffer->m_ColorAttachments[4]->clear_to(&v);
+}
 
 static void reload_all_shaders()
 {
 	LightShader = Shader::create("resources/shaders/LightShader.glsl");
+	rp_Lighting.pShader = LightShader.get();
 	DefaultMeshShader = Shader::create("resources/shaders/DefaultShader.glsl");
+	rp_DebugGeometry.pShader = DefaultMeshShader.get();
 	SceneRenderer::s_VoxelMeshShader = Shader::create("resources/shaders/VoxelShader.glsl");
+	rp_Geometry.pShader = SceneRenderer::s_VoxelMeshShader.get();
 	Shader_NoFragment = Shader::create("resources/shaders/VertexOnlyShader.glsl");
+	rp_Stencil.pShader = Shader_NoFragment.get();
 	CompositeShader = Shader::create("resources/shaders/CompositeShader.glsl");
+	rp_Composite.pShader = CompositeShader.get();
 	BlitShader = Shader::create("resources/shaders/BlitShader.glsl");
-	s_SpriteShader = Shader::create("resources/shaders/SpriteShader.glsl");
-	postprocessShader = Shader::create("resources/shaders/PPShader.glsl");
-	s_TextShader = Shader::create("resources/shaders/TextShader.glsl");
+	rp_Blit.pShader = BlitShader.get();
+	SpriteShader = Shader::create("resources/shaders/SpriteShader.glsl");
+	TextShader = Shader::create("resources/shaders/TextShader.glsl");
 
-	s_Compute = ComputeShader::create("resources/shaders/compute/ComputeAO.glsl");
+	ComputeAOShader = ComputeShader::create("resources/shaders/compute/ComputeAO.glsl");
+	ComputeSSAOShader = ComputeShader::create("resources/shaders/compute/ComputeSSAO.glsl");
 }
 
 static void init_renderpass()
@@ -94,10 +156,6 @@ static void init_renderpass()
 	rp_Lighting.Stencil.Func = { StencilTest::NotEqual, 0x00, 0xff };
 	rp_Lighting.Blend.Enable = true;
 
-	// Final
-	rp_AmbientOcclusion.pShader = postprocessShader.get();
-	rp_AmbientOcclusion.Depth.Test = DepthTest::Off;
-
 	rp_Composite.pShader = CompositeShader.get();
 	rp_Composite.Depth.Test = DepthTest::Off;
 
@@ -116,6 +174,7 @@ static void init_renderpass()
 
 static void load_models()
 {
+
 	auto load = [](VoxelEntity& obj, auto path, Float3 pos)
 	{
 		obj.Mesh = VoxelMesh::load_from_file(path);
@@ -124,11 +183,14 @@ static void load_models()
 	};
 
 	load(gas_tank, "resources/models/gas_tank_22.png", {});
+	generate_terrain();
+	return;
+
 	load(blue_car, "resources/models/blue_car_13.png", { -4.0f, 0.0f, -2.0f });
 	load(box, "resources/models/box_120.png", {});
-	load(transformer, "resources/models/transformer_57.png", { -5.0f, 1.05f, -4.05f });
+	load(transformer, "resources/models/transformer_57.png", { -5.0f, 3.05f, 0.05f });
 	load(miniPole, "resources/models/pole_12.png", { -2.5f, 0.0f, -1.8f });
-	load(chunk, "resources/models/chunk_80.png", { 2.0f, 0.0f, 4.0f });
+	load(chunk, "resources/models/chunk_80.png", { 0.0f, 0.0f, 0.0f });
 }
 
 void testbed_start(App& app)
@@ -136,10 +198,10 @@ void testbed_start(App& app)
 	Window* window = app.get_window();
 
 	cameraController.m_Camera = &camera;
-	cameraController.m_TargetPosition = { -3.0f, 0.0f, 0.0f };
+	cameraController.m_TargetPosition = { -3.0f, 4.0f, 0.0f };
 	cameraController.m_TargetEuler = { 0.0f, -90.0f, 0.0f };
 
-	SceneRenderer::init(window->get_width(), window->get_height());
+	create_framebuffer(window->get_width(), window->get_height());
 	reload_all_shaders();
 	init_renderpass();
 	load_models();
@@ -152,14 +214,44 @@ void testbed_start(App& app)
 	crosshair->set_wrap_mode(TextureWrapMode::Clamp);
 	crosshair->set_filter_mode(TextureFilterMode::Linear);
 
-	s_ComputeImageTarget = Texture2D::create(window->get_width(), window->get_height(), TextureFormat::RGBA8);
+	testTexture = Texture2D::load("resources/textures/plastic_normals.jpg");
+	testTexture->set_wrap_mode(TextureWrapMode::Repeat);
+	testTexture->set_filter_mode(TextureFilterMode::Linear);
 
 	s_Font = Font::load_from_file("resources/fonts/Raleway-Regular.ttf");
+}
+
+static TracedRay sceneCameraRay;
+
+static void handle_scene_view_ray_trace(const Transformation& camera)
+{
+	const float MaxDistanceMeters = 10.0f;
+
+	Float3 origin = camera.Position;
+	Float3 euler = camera.Rotation;
+
+	float pitch = glm::radians(euler.x), yaw = glm::radians(euler.y);
+	Float3 direction = Float3(
+		glm::cos(pitch) * -glm::sin(yaw),
+		glm::sin(pitch),
+		glm::cos(pitch) * -glm::cos(yaw)
+	);
+
+	sceneCameraRay = SceneRenderer::trace_ray_through_scene(origin, direction, MaxDistanceMeters);
+}
+
+static Float3 get_highlighted_voxel_center()
+{
+	Float3 cell = Float3(sceneCameraRay.cell);
+	Float3 center = cell * 0.1f + 0.05f;
+	return center;
 }
 
 void testbed_update(App& app)
 {
 	Window* window = app.get_window();
+	Float2 viewport = { (float)window->get_width(), (float)window->get_height() };
+
 	float deltaTime = app.get_delta_time();
 	float elapsedTime = app.get_elapsed_time();
 	uint32_t frameNumber = (uint32_t)app.get_frame();
@@ -168,65 +260,75 @@ void testbed_update(App& app)
 
 	Matrix4 view = cameraController.get_view();
 	Matrix4 projection = camera.get_projection();
-	pipeline.begin(view, projection);
+	renderPipeline.begin(view, projection);
+
+	s_Framebuffer->bind();
+	s_Framebuffer->clear({ 0.0f });
 
 	SceneRenderer::begin_frame(camera, cameraController.get_transform());
-	auto& framebuffer = SceneRenderer::s_Framebuffer;
-
-	if (Input::was_key_pressed(Key::R) || frameNumber == 0) {
-		SceneRenderer::generate_shadow_map(ENTITIES_TO_RENDER);
-	}
 
 	if (Input::was_key_pressed(Key::R) && Input::is_key_down(Key::Control))
 		reload_all_shaders();
 
-	// VIEW RAY TRACE
-	TracedRay viewRay;
+	handle_scene_view_ray_trace(cameraController.get_transform());
+
+	auto last = s_TerrainParams;
+	if (Input::was_key_pressed(Key::Y))
+		s_TerrainParams.noise.amplitude += 0.1f * Input::is_key_down(Key::Tab) ? -1.0f : 1.0f;
+	if (Input::was_key_pressed(Key::U))
+		s_TerrainParams.noise.frequency += 0.1f * (Input::is_key_down(Key::Tab) ? -1.0f : 1.0f);
+	if (Input::was_key_pressed(Key::I))
+		s_TerrainParams.noise.lacunarity += 0.1f * Input::is_key_down(Key::Tab) ? -1.0f : 1.0f;
+	if (Input::was_key_pressed(Key::O)) 
+		s_TerrainParams.noise.persistence += 0.1f * (Input::is_key_down(Key::Tab) ? -1.0f : 1.0f);
+	if (Input::was_key_pressed(Key::P))
+		s_TerrainParams.noise.octaves += Input::is_key_down(Key::Tab) ? -1 : 1;
+
+	if (Input::was_key_pressed(Key::P))
 	{
-		Transformation& transform = cameraController.get_transform();
-		Float3 origin = transform.Position;
+		LOG(s_TerrainParams.noise.amplitude);
+		LOG(s_TerrainParams.noise.frequency);
+		LOG(s_TerrainParams.noise.lacunarity);
+		LOG(s_TerrainParams.noise.persistence);
+		LOG(s_TerrainParams.noise.octaves);
+	}
 
-		float pitch = glm::radians(transform.Rotation.x), yaw = glm::radians(transform.Rotation.y);
-		Float3 forward = Float3(
-			glm::cos(pitch) * -glm::sin(yaw),
-			glm::sin(pitch),
-			glm::cos(pitch) * -glm::cos(yaw)
-		);
-
-		viewRay = SceneRenderer::trace_ray_through_scene(origin, forward, 10.0f);
+	if (memcmp(&s_TerrainParams, &last, sizeof(s_TerrainParams)) != 0)
+	{
+		generate_terrain();
 	}
 
 	// GEOMETRY PASS
-	pipeline.submit_pass(rp_Geometry, [&]()
+	renderPipeline.submit_pass(rp_Geometry, [&]()
 	{
-		rp_Geometry.pShader->set_float3("u_CameraPosition", cameraController.get_transform().Position);
+		testTexture->bind(2);
 
-		SceneRenderer::draw_entities(ENTITIES_TO_RENDER);
+		static uint32_t tile = 4;
+		if (Input::was_key_pressed(Key::UpArrow))
+			tile++;
+		if (Input::was_key_pressed(Key::DownArrow))
+			tile--;
+
+		rp_Geometry.pShader->set_float3("u_CameraPosition", cameraController.get_transform().Position);
+		rp_Geometry.pShader->set_int("u_TextureTileFactor", tile);
+
+		if (Input::is_key_down(Key::M))
+			SceneRenderer::draw_shadow_map();
+		else
+			SceneRenderer::draw_entities(ENTITIES_TO_RENDER);
 	});
 
-	static Float3 lightPos = { -1.0f, 6.0f, 1.0f };
+	static Float3 lightPos = { -3.0f, 5.0f, 2.0f };
+	if (false)
 	// LIGHTING SHT
-	//if (false)
 	{
-		static float radius = 8.0f;
-
-		{
-			if (Input::is_key_down(Key::UpArrow))
-				lightPos.z -= deltaTime / 2.0f;
-			if (Input::is_key_down(Key::DownArrow))
-				lightPos.z += deltaTime / 2.0f;
-			if (Input::is_key_down(Key::LeftArrow))
-				lightPos.x -= deltaTime / 2.0f;
-			if (Input::is_key_down(Key::RightArrow))
-				lightPos.x += deltaTime / 2.0f;
-		}
+		static float radius = 8.0f; 
 
 		auto lightTransformation = Transformation(lightPos, Float3(0.0f), Float3(radius * 2, radius * 2, radius * 2)).get_transform();
-		//static float attConst = 0.7f, attLinear = -0.1f, attExp = -0.13f;
 		static float intensity = 1.0f;
 
 		// STENCIL PASS
-		pipeline.submit_pass(rp_Stencil, [&]()
+		renderPipeline.submit_pass(rp_Stencil, [&]()
 		{
 			Graphics::reset_draw_buffers();
 
@@ -235,10 +337,10 @@ void testbed_update(App& app)
 			Graphics::draw_sphere(); // lighting volume mesh
 		});
 
-		framebuffer->bind(); // fix draw buffers
+		s_Framebuffer->bind(); // fix draw buffers
 
 		// LIGHT PASS
-		pipeline.submit_pass(rp_Lighting, [&]()
+		renderPipeline.submit_pass(rp_Lighting, [&]()
 		{ 
 			Graphics::set_blend_function(1, 1); // GL_ONE = 1 = mindblown
 
@@ -255,151 +357,196 @@ void testbed_update(App& app)
 			LightShader->set_float3("u_VolumeCenter", lightPos);
 			LightShader->set_float2("u_ViewportDims", { window->get_width(), window->get_height() });
 			LightShader->set_int("u_FrameNumber", frameNumber);
-			framebuffer->m_DepthStencilAttachment->bind(0);
-			framebuffer->m_ColorAttachments[1]->bind(2);
+			s_Framebuffer->m_DepthStencilAttachment->bind(0);
+			s_Framebuffer->m_ColorAttachments[1]->bind(2);
+			SceneRenderer::get_shadow_map()->bind(1);
+			blueNoise->bind(9);
 
 			Graphics::draw_sphere(); // lighting volume mesh
 		});
 	}
 
-	Graphics::set_blend_function(0x0302, 0x0303);
-
-	Texture2D* ao_read_texture = nullptr, * ao_write_texture = nullptr;
-	// AO PASS
-	pipeline.submit_pass(rp_AmbientOcclusion, [&]()
+	bool ssao = false;
+	Texture2D* fresh_ao_texture = s_Framebuffer->m_ColorAttachments[3].get(); // For final composite
+	// COMPUTE AO
+	if (!ssao)
 	{
-		// HANDLE AO PING PONG
+		ComputeAOShader->bind();
+
+		SceneRenderer::get_shadow_map()->bind(0);
+		blueNoise->bind(1);
+		s_Framebuffer->m_DepthStencilAttachment->bind(2);
+		s_Framebuffer->m_ColorAttachments[5]->bind(3);
+		s_Framebuffer->m_ColorAttachments[1]->bind(4);
+		s_Framebuffer->m_ColorAttachments[2]->bind(5);
+
+		// ao accum tex ping pong
 		{
 			uint32_t readIndex = frameNumber % 2;
 			uint32_t writeIndex = 1 - readIndex;
 
 			const uint32_t aoIndex = 3;
-			uint32_t fbo = framebuffer->get_handle();
-			const auto& read = framebuffer->m_ColorAttachments[aoIndex + readIndex];
-			const auto& write = framebuffer->m_ColorAttachments[aoIndex + writeIndex];
-			framebuffer->set_index_handle(3, write->get_handle());
-
-			ao_read_texture = read.get();
-			ao_write_texture = write.get();
+			uint32_t fbo = s_Framebuffer->get_handle();
+			const auto& read = s_Framebuffer->m_ColorAttachments[aoIndex + readIndex];
+			const auto& write = s_Framebuffer->m_ColorAttachments[aoIndex + writeIndex];
+			
 			read->bind(6);
+			write->bind_as_image(0, TextureAccessMode::Write);
+
+			fresh_ao_texture = write.get();
 		}
 
-		framebuffer->m_DepthStencilAttachment->bind(0);
-		SceneRenderer::get_shadow_map()->bind(1);
-		framebuffer->m_ColorAttachments[5]->bind(2);
+		ComputeAOShader->set_matrix("u_InverseView", glm::inverse(view));
+		ComputeAOShader->set_matrix("u_InverseProjection", glm::inverse(projection));
+		ComputeAOShader->set_matrix("u_PrevFrameViewProjection", s_PreviousViewProjection);
+		ComputeAOShader->set_matrix("u_ViewProjection", projection * view);
+		ComputeAOShader->set_int("u_FrameNumber", frameNumber);
 
-		framebuffer->m_ColorAttachments[0]->bind(3);
-		framebuffer->m_ColorAttachments[1]->bind(4);
-		framebuffer->m_ColorAttachments[2]->bind(5);
-		blueNoise->bind(9);
-
-		postprocessShader->set_float("u_Time", elapsedTime);
-		postprocessShader->set_matrix("u_InverseView", glm::inverse(view));
-		postprocessShader->set_matrix("u_InverseProjection", glm::inverse(projection));
-		postprocessShader->set_matrix("u_PrevFrameViewProjection", s_PreviousViewProjection);
-		postprocessShader->set_float3("u_CameraPos", cameraController.m_Transformation.Position);
-		postprocessShader->set_int("u_FrameNumber", frameNumber);
-
-		Graphics::draw_fullscreen_triangle(postprocessShader);
-	});
-
-	// BLIT A BIT O DAT SHIT
-	pipeline.submit_pass(rp_Blit, [&]()
-	{
-		framebuffer->m_DepthStencilAttachment->bind(0);
-		framebuffer->m_ColorAttachments[1]->bind(1);
-		Graphics::draw_fullscreen_triangle(BlitShader);
-	});
-
-	Float2 viewport = { (float)window->get_width(), (float)window->get_height() };
-
-	// COMPUTE
-	{
-		s_ComputeImageTarget->bind_as_image(0, TextureAccessMode::Write);
 		uint32_t localSizeX = 16, localSizeY = 16;
-		s_Compute->dispatch(
+		ComputeAOShader->dispatch(
+			(viewport.x + localSizeX - 1) / localSizeX,
+			(viewport.y + localSizeY - 1) / localSizeY
+		);
+	}
+	
+	if (ssao)
+	// COMPUTE SSAO
+	{
+		ComputeSSAOShader->bind();
+
+		s_Framebuffer->m_DepthStencilAttachment->bind(0);
+		s_Framebuffer->m_ColorAttachments[1]->bind(1);
+
+		// ao accum tex ping pong
+		{
+			uint32_t readIndex = frameNumber % 2;
+			uint32_t writeIndex = 1 - readIndex;
+
+			const uint32_t aoIndex = 3;
+			uint32_t fbo = s_Framebuffer->get_handle();
+			const auto& read = s_Framebuffer->m_ColorAttachments[aoIndex + readIndex];
+			const auto& write = s_Framebuffer->m_ColorAttachments[aoIndex + writeIndex];
+
+			read->bind(2);
+			write->bind_as_image(0, TextureAccessMode::Write);
+
+			fresh_ao_texture = write.get();
+		}
+
+		ComputeSSAOShader->set_matrix("u_InverseView", glm::inverse(view));
+		ComputeSSAOShader->set_matrix("u_InverseProjection", glm::inverse(projection));
+		ComputeSSAOShader->set_matrix("u_ViewProjection", projection * view);
+
+		uint32_t localSizeX = 16, localSizeY = 16;
+		ComputeSSAOShader->dispatch(
 			(viewport.x + localSizeX - 1) / localSizeX,
 			(viewport.y + localSizeY - 1) / localSizeY
 		);
 	}
 
-	// READS AO ACCUM
-	pipeline.submit_pass(rp_Composite, [&]()
+	// Blit depth and normals into old depth / old normal
+	renderPipeline.submit_pass(rp_Blit, [&]()
 	{
-		Framebuffer::unbind();
-		framebuffer->m_ColorAttachments[0]->bind(0);
-		framebuffer->m_ColorAttachments[1]->bind(1);
-		ao_write_texture->bind(2);
-		framebuffer->m_ColorAttachments[6]->bind(3);
-		s_ComputeImageTarget->bind(4);
+		s_Framebuffer->m_DepthStencilAttachment->bind(0);
+		s_Framebuffer->m_ColorAttachments[1]->bind(1);
+		Graphics::draw_fullscreen_triangle(BlitShader);
+	});
 
-		static int shaderOutputColor = 0;
-		if (Input::was_key_pressed(Key::A_1)) shaderOutputColor = 0;
-		if (Input::was_key_pressed(Key::A_2)) shaderOutputColor = 1;
-		if (Input::was_key_pressed(Key::A_3)) shaderOutputColor = 2;
-		if (Input::was_key_pressed(Key::A_4)) shaderOutputColor = 3;
-		if (Input::was_key_pressed(Key::A_5)) shaderOutputColor = 4;
-		if (Input::was_key_pressed(Key::A_6)) shaderOutputColor = 5;
-		if (Input::was_key_pressed(Key::A_7)) shaderOutputColor = 6;
-		CompositeShader->set_int("u_Output", shaderOutputColor);
+	Framebuffer::unbind();
+
+	// READS AO ACCUM
+	renderPipeline.submit_pass(rp_Composite, [&]()
+	{
+		s_Framebuffer->m_ColorAttachments[0]->bind(0);
+		s_Framebuffer->m_ColorAttachments[1]->bind(1);
+		s_Framebuffer->m_ColorAttachments[6]->bind(3);
+		fresh_ao_texture->bind(2);
 
 		Graphics::draw_fullscreen_triangle(CompositeShader);
 	});
-	return;
 
-	pipeline.submit_pass(rp_DebugGeometry, [&]()
+	Graphics::set_blend_function(0x0302, 0x0303);
+	renderPipeline.submit_pass(rp_DebugGeometry, [&]()
 	{
-		Framebuffer::unbind();
-
-		Float3 center = Float3(viewRay.cell) * 0.1f + 0.05f;
-		Float3 scale = Float3(0.1f) + 0.001f;
-
-		Matrix4 debuglighttransform = Transformation(center, {}, scale).get_transform();
-		DefaultMeshShader->set_float4("u_Color", { 1.0f, 1.0f, 1.0f, 0.4f });
-		DefaultMeshShader->set_matrix("u_Transformation", debuglighttransform);
 		DefaultMeshShader->set_float2("u_ViewportDims", viewport);
-		framebuffer->m_DepthStencilAttachment->bind(0);
+		DefaultMeshShader->set_int("u_DepthClip", false);
+
+		static bool render_outline = false;
+
+		if (Input::was_key_pressed(Key::B))
+			render_outline = !render_outline;
+
+		Graphics::set_draw_mode(PrimitiveMode::LineStrip);
+		// Bounding boxes
+		if (render_outline)
+		for (VoxelEntity* pentity : ENTITIES_TO_RENDER)
+		{
+			Transformation t = pentity->Transform;
+			auto transformation = t.get_transform();
+
+			DefaultMeshShader->set_float4("u_Color", { 0.9f, 0.9f, 0.1f, 0.4f });
+			DefaultMeshShader->set_matrix("u_Transformation", transformation);
+			Graphics::draw_cube();
+		}
+		Graphics::set_draw_mode(PrimitiveMode::Triangles);
+
+		// voxel cursor highlight
+		Float3 center = get_highlighted_voxel_center();
+		Float3 scale = Float3(0.1f) + 0.001f;
+		Matrix4 highlight_transform = Transformation(center, {}, scale).get_transform();
+		DefaultMeshShader->set_float4("u_Color", { 1.0f, 1.0f, 1.0f, 0.4f });
+		DefaultMeshShader->set_matrix("u_Transformation", highlight_transform);
+		DefaultMeshShader->set_int("u_DepthClip", true);
+		s_Framebuffer->m_DepthStencilAttachment->bind(0);
 
 		Graphics::draw_cube();
 	});
 
 	Matrix4 pixelProjection = glm::ortho(0.0f, viewport.x, 0.0f, viewport.y, -1.0f, 1.0f);
-	pipeline.submit_pass(rp_ScreenspaceUI, [&]()
+	renderPipeline.submit_pass(rp_ScreenspaceUI, [&]()
 	{
 		// debug text
-		s_TextShader->bind();
-		s_TextShader->set_matrix("u_ViewProjection", pixelProjection);
+		TextShader->bind();
+		TextShader->set_matrix("u_ViewProjection", pixelProjection);
 		{
-			s_TextShader->set_matrix("u_Transformation",
+			TextShader->set_matrix("u_Transformation",
 				Transformation({ 25.0f, viewport.y - 80.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
 			Graphics::draw_text(std::format("ms: {:.3f}", deltaTime * 1000.0f), s_Font);
 		}
 		{
-			s_TextShader->set_matrix("u_Transformation",
+			TextShader->set_matrix("u_Transformation",
 				Transformation({ 25.0f, viewport.y - 160.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
 			Graphics::draw_text(std::format("fps: {:.2f}", 1.0f / deltaTime), s_Font);
 		}
+		// Camera position
 		{
 			Float3 cam = (cameraController.get_transform().Position * 0.001f) * 1000.0f;
-			s_TextShader->set_matrix("u_Transformation",
+			TextShader->set_matrix("u_Transformation",
 				Transformation({ 25.0f, viewport.y - 240.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
 			Graphics::draw_text(std::format("({:.2f}, {:.2f}, {:.2f})", cam.x, cam.y, cam.z), s_Font);
 		}
+		// Highlighted cell
+		{
+			Float3 cell = get_highlighted_voxel_center() - Float3(0.05f);
+			TextShader->set_matrix("u_Transformation",
+				Transformation({ 25.0f, viewport.y - 300.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
+			Graphics::draw_text(std::format("({:.2f}, {:.2f}, {:.2f})", cell.x, cell.y, cell.z), s_Font);
+		}
 
 		// crosshair idfk
-		s_SpriteShader->bind();
-		s_SpriteShader->set_float4("u_Tint", { 0.0f, 0.0f, 0.0f, 1.0f });
+		SpriteShader->bind();
+		SpriteShader->set_float4("u_Tint", { 0.0f, 0.0f, 0.0f, 1.0f });
 		crosshair->bind(0);
-		s_SpriteShader->set_matrix("u_ViewProjection", pixelProjection);
+		SpriteShader->set_matrix("u_ViewProjection", pixelProjection);
 
 		float aspect = viewport.y / viewport.x;
 		Matrix4 transform = Transformation({ viewport.x / 2.0f, viewport.y / 2.0f, 0.0f }, {},
 			{ 100.0f, 100.0f, 1.0f }).get_transform();
-		s_SpriteShader->set_matrix("u_Transformation", transform);
+		SpriteShader->set_matrix("u_Transformation", transform);
 		Graphics::draw_quad();
 	});	
 
-	s_PreviousViewProjection = pipeline.m_ViewProjectionMatrix;
+	s_PreviousViewProjection = renderPipeline.m_ViewProjectionMatrix;
 }
 
 void testbed_stop(App& app)
@@ -409,7 +556,7 @@ void testbed_stop(App& app)
 
 void testbed_window_resized(WindowResizeEvent& e)
 {
-	SceneRenderer::s_Framebuffer->resize(e.width, e.height);
+	s_Framebuffer->resize(e.width, e.height);
 	camera.set_aspect_ratio((float)e.width / (float)e.height);
 }
 

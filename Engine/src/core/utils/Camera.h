@@ -39,7 +39,7 @@ namespace Engine {
 		float m_OrthoSize = 10.0f;
 		float m_AspectRatio = 1920 / 1080.0f;
 		float m_Near = 0.1f;
-		float m_Far = 100.0f;
+		float m_Far = 500.0f;
 		Matrix4 m_Projection;
 	};
 

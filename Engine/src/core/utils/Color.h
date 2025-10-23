@@ -23,6 +23,15 @@ namespace Engine {
 			: r(other.r), g(other.g), b(other.b), a(other.a)
 		{}
 
+		Color operator*(float v) const
+		{
+			return { r * v, g * v, b * v, a * v };
+		}
+		Color operator/(float v) const
+		{
+			return { r / v, g / v, b / v, a / v };
+		}
+
 		float* operator&()
 		{
 			return &r;

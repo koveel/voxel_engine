@@ -5,12 +5,11 @@ layout(binding = 9) uniform sampler2D u_BlueNoiseTexture;
 
 uniform mat4 u_InverseView;
 uniform mat4 u_InverseProjection;
-
 uniform int u_FrameNumber;
 
 const float g_BaseVoxelScale = 0.1f;
 const float g_ShadowLODScales[3] = float[3](g_BaseVoxelScale, g_BaseVoxelScale * 2.0f, g_BaseVoxelScale * 4.0f);
-const int g_ShadowLODDistances[3] = int[3](4, 6, 14);
+const int g_ShadowLODDistances[3] = int[3](3, 5, 8);
 
 const float g_PI = 3.14159265358f;
 const float g_GoldenRatio = 1.61803398875f;

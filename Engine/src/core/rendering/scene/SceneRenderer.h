@@ -23,8 +23,6 @@ namespace Engine {
 	class SceneRenderer
 	{
 	public:
-		static void init(uint32_t screen_width, uint32_t screen_height);
-
 		static void begin_frame(const Camera& camera, const Transformation& view);
 		static void draw_entities(const std::vector<VoxelEntity*>& entities);
 		static void draw_shadow_map();
@@ -42,8 +40,9 @@ namespace Engine {
 		static owning_ptr<Texture3D> s_ShadowMap;
 	public:
 		static RenderPipeline s_RenderPipeline;
-		static owning_ptr<Framebuffer> s_Framebuffer;
 		static owning_ptr<Shader> s_VoxelMeshShader;
+
+		friend class Terrain; // atrocious
 	};
 
 }

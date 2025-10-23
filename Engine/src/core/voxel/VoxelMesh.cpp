@@ -5,20 +5,16 @@
 
 #include <stb_image/stb_image.h>
 
-namespace Engine {
-
-	static uint32_t encode_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-		return a | (b << 8) | (g << 16) | (r << 24);
-	}
+namespace Engine {	
 
 	struct VoxelMeshData
 	{
 		uint8_t* voxels = nullptr;
-		uint32_t palette[255]{};
+		uint32_t palette[256]{};
 		uint32_t filled_count = 0;
 	};
 
-	// Generates 8-bit voxel data and corresponding palette
+	// Generates 8-bit voxel data and corresponding palette from image pixels
 	static VoxelMeshData process_voxel_image_data(uint8_t* pixels, uint32_t width, uint32_t height, uint32_t depth, uint32_t bytesPerPixel)
 	{
 		uint32_t voxelCount = width * height * depth;
@@ -82,6 +78,8 @@ namespace Engine {
 		return result;
 	}
 
+	// todo: fix ts
+	static uint32_t s_MaterialIndex = 0;
 	owning_ptr<Texture2D> VoxelMesh::s_MaterialPalette;
 
 	VoxelMesh VoxelMesh::load_from_file(const std::filesystem::path& filepath)
@@ -96,7 +94,6 @@ namespace Engine {
 			defaultPalette[1] = 0xffffffff;
 			s_MaterialPalette->set_data(defaultPalette, 0, 0, 256, 1);
 		}
-		static uint32_t MaterialIndex = 0;
 
 		// TODO: better way of doin ts
 		std::string path = filepath.string();
@@ -104,7 +101,7 @@ namespace Engine {
 		uint32_t sliceCount = strtol(sub.c_str(), nullptr, 0);
 
 		VoxelMesh mesh;
-		mesh.m_MaterialIndex = MaterialIndex++;
+		mesh.m_MaterialIndex = s_MaterialIndex++;
 
 		// Load image
 		Image image = image_load_from_file(filepath, false);
@@ -125,6 +122,23 @@ namespace Engine {
 		delete[] voxelData.voxels;
 
 		return mesh;
-	}	
+	}
+
+	VoxelMesh VoxelMesh::build_from_voxels(uint8_t* voxels, size_t width, size_t height, size_t depth, uint32_t* palette, uint32_t materialIndex)
+	{
+		VoxelMesh mesh;
+
+		// Create texture
+		auto& texture = mesh.m_Texture = Texture3D::create(width, height, depth, TextureFormat::R8UI);
+		texture->set_filter_mode(TextureFilterMode::Point);
+		texture->set_data(voxels);
+
+		// palette
+		mesh.m_MaterialIndex = materialIndex ? materialIndex : s_MaterialIndex++;
+		s_MaterialPalette->set_data(palette, 0, materialIndex, 0, 1);
+
+		return mesh;
+	}
+
 
 }

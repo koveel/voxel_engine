@@ -34,6 +34,12 @@ namespace Engine {
 		DecrementWrap = 0X8508,
 	};
 
+	enum class PrimitiveMode
+	{
+		LineStrip = 0x0003,
+		Triangles = 0x0004,
+	};
+
 	class Graphics
 	{
 	public:
@@ -59,6 +65,9 @@ namespace Engine {
 		static void set_draw_buffers(uint32_t* buffers, size_t count);
 
 		static void set_blend_function(uint32_t sfactor, uint32_t dfactor);
+		static void set_draw_mode(PrimitiveMode mode);
+
+		static void memory_barrier(uint32_t target);
 
 		static void draw_cube();
 		static void draw_sphere();

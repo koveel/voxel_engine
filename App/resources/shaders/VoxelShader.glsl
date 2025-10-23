@@ -25,6 +25,9 @@ in vec3 o_VertexWorldSpace;
 
 layout(binding = 0) uniform usampler3D u_VoxelTexture;
 layout(binding = 1) uniform sampler2D u_MaterialPalette;
+layout(binding = 2) uniform sampler2D u_Texture;
+
+uniform int u_TextureTileFactor = 1;
 
 uniform vec3 u_CameraPosition;
 
@@ -59,23 +62,39 @@ bool Approx(float a, float b)
 	return abs(a - b) < epsilon;
 }
 
+vec2 ComputeFaceUV(vec3 local, vec3 normal)
+{
+	vec2 uv;
+	if (abs(normal.x) > 0.5f)
+		uv = local.zy;
+	else if (abs(normal.y) > 0.5f)
+		uv = local.xz;
+	else
+		uv = local.xy;
+
+	// Flip horizontally for opposite faces
+	//uv.x = any(lessThan(normal, vec3(0.0f))) ? 1.0f - uv.x : uv.x;
+	uv.x = 1.0f - uv.x;
+
+	return uv;
+}
+
 void RaymarchVoxelMesh(
-	vec3 rayOrigin, vec3 rayDirection, vec3 transformedObbCenter,
-	//out vec4 color, out vec3 normal, out float t, out ivec3 voxel
-	out int color, out vec3 normal, out float t, out ivec3 voxel
+	vec3 rayOrigin, vec3 rayDirection, vec3 obbCenter,
+	out int color, out vec3 normal, out float t, out ivec3 voxel, out vec2 uv
 )
 {
 	const float VoxelScale = 0.1f;
 
 	// Bounding box
 	vec3 worldspaceExtents = (u_VoxelDimensions * VoxelScale) * 0.5f;
-	vec3 p0 = transformedObbCenter - worldspaceExtents;
-	vec3 p1 = transformedObbCenter + worldspaceExtents;
+	vec3 p0 = obbCenter - worldspaceExtents;
+	vec3 p1 = obbCenter + worldspaceExtents;
 
 	float hit = RayAABB(rayOrigin, rayDirection, p0, p1);
-	vec3 voxels_per_unit = u_VoxelDimensions / (p1 - p0);
-	vec3 entry = ((rayOrigin + rayDirection * (hit + 0.0001f)) - p0) * voxels_per_unit;
-	vec3 entry_worldspace = rayOrigin + rayDirection * hit;
+	vec3 voxelsPerUnit = u_VoxelDimensions / (p1 - p0);
+	vec3 entry = ((rayOrigin + rayDirection * (hit + 0.0001f)) - p0) * voxelsPerUnit;
+	vec3 entryWorldspace = rayOrigin + rayDirection * hit;
 
 	vec3 step = sign(rayDirection);
 	vec3 delta = abs(1.0f / rayDirection);
@@ -84,17 +103,15 @@ void RaymarchVoxelMesh(
 
 	int axis = 0;
 	int maxSteps = u_VoxelDimensions.x + u_VoxelDimensions.y + u_VoxelDimensions.z;
-
 	for (int i = 0; i < maxSteps; i++)
 	{
 		ivec3 voxelPos = ivec3(pos);
 
 		uint col = texelFetch(u_VoxelTexture, voxelPos, 0).r;
-		//color = texelFetch(u_VoxelTexture, voxelPos, 0);
 		if (col != 0)
 		{
 			color = int(col);
-			voxel = voxelPos;
+			voxel = voxelPos;			
 
 			// edge voxel
 			if (i == 0)
@@ -103,7 +120,7 @@ void RaymarchVoxelMesh(
 				// Determine normal
 				for (int a = 0; a < 3; a++)
 				{
-					float v = entry_worldspace[a];
+					float v = entryWorldspace[a];
 					if (Approx(v, p0[a]) || Approx(v, p1[a]))
 					{
 						normal = vec3(0.0f);
@@ -111,13 +128,25 @@ void RaymarchVoxelMesh(
 						break;
 					}
 				}
+
+				// uv
+				vec3 gridPos = (entryWorldspace - p0) * voxelsPerUnit;
+				vec3 local = fract(gridPos / u_TextureTileFactor);
+				uv = ComputeFaceUV(local, normal);
+
 				return;
 			}
 
 			normal = vec3(0.0f);
 			normal[axis] = -step[axis];
+			t = hit + (tMax[axis] - delta[axis]) / voxelsPerUnit[axis];
+			
+			// uv
+			vec3 worldHit = rayOrigin + rayDirection * t;
+			vec3 gridPos = (worldHit - p0) * voxelsPerUnit;
+			vec3 local = fract(gridPos / u_TextureTileFactor);
+			uv = ComputeFaceUV(local, normal);
 
-			t = hit + (tMax[axis] - delta[axis]) / voxels_per_unit[axis];
 			return;
 		}
 
@@ -173,6 +202,34 @@ float LinearizeDepth(vec3 p)
 	return (ndc.z + 1.0f) / 2.0f;
 }
 
+void GetVoxelTangentBasis(vec3 normal, out vec3 T, out vec3 B)
+{
+	if (normal.x > 0.5) {          // +X face
+		T = vec3(0, 0, 1);
+		B = vec3(0, -1, 0);
+	}
+	else if (normal.x < -0.5) {    // -X face
+		T = vec3(0, 0, -1);
+		B = vec3(0, -1, 0);
+	}
+	else if (normal.y > 0.5) {     // +Y face
+		T = vec3(1, 0, 0);
+		B = vec3(0, 0, 1);
+	}
+	else if (normal.y < -0.5) {    // -Y face
+		T = vec3(1, 0, 0);
+		B = vec3(0, 0, -1);
+	}
+	else if (normal.z > 0.5) {     // +Z face
+		T = vec3(1, 0, 0);
+		B = vec3(0, -1, 0);
+	}
+	else {                         // -Z face
+		T = vec3(-1, 0, 0);
+		B = vec3(0, -1, 0);
+	}
+}
+
 void main()
 {
 	vec3 cameraToPixel = normalize(u_CameraPosition - o_VertexWorldSpace);
@@ -183,19 +240,39 @@ void main()
 	vec4 relativeViewDir = u_OBBOrientation * vec4(cameraToPixel, 1.0f);
 	vec3 transformedObbCenter = (u_OBBOrientation * vec4(u_OBBCenter, 1.0f)).xyz;
 
-	vec4 colSample;
-	int col;
+	int colorIndex;
 	vec3 normal;
 	float t;
 	ivec3 voxel;
+	vec2 uv;
 	
-	RaymarchVoxelMesh(relativeCam.xyz, -relativeViewDir.xyz, transformedObbCenter, col, normal, t, voxel);
+	// march
+	RaymarchVoxelMesh(relativeCam.xyz, -relativeViewDir.xyz, transformedObbCenter, colorIndex, normal, t, voxel, uv);
 
+	// hitpoint / depth
 	vec3 hitpoint = u_CameraPosition - cameraToPixel * t;
-	gl_FragDepth = LinearizeDepth(hitpoint);
+	float depth = LinearizeDepth(hitpoint);
+	gl_FragDepth = depth;
 
-	int colorIndex = col;
-	//int colorIndex = int(colSample.r * 255);
-	o_Albedo = texelFetch(u_MaterialPalette, ivec2(colorIndex, u_MaterialIndex), 0);
-	o_Normal = (u_OBBOrientation * vec4(normal, 1.0f)).xyz;
+	// normals
+	const float NormalMapStrength = 0.5f;
+	normal = (u_OBBOrientation * vec4(normal, 1.0f)).xyz;
+	vec3 normal_map = (u_OBBOrientation * vec4(texture(u_Texture, uv).rgb, 1.0f)).xyz;
+	o_Normal = mix(normal, normal_map, NormalMapStrength);
+
+	vec3 T, B;
+	GetVoxelTangentBasis(normal, T, B);
+
+	vec3 tangentNormal = texture(u_Texture, uv).xyz * 2.0 - 1.0;
+	vec3 worldNormal = normalize(
+		tangentNormal.x * T +
+		tangentNormal.y * B +
+		tangentNormal.z * normal
+	);
+
+	o_Normal = normal;
+
+	vec4 albedo = texelFetch(u_MaterialPalette, ivec2(colorIndex, u_MaterialIndex), 0);
+	//o_Albedo = mix(textured, albedo, 0.75f);
+	o_Albedo = albedo;
 }

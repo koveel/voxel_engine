@@ -11,6 +11,7 @@ namespace Engine {
 		VoxelMesh() = default;
 
 		static VoxelMesh load_from_file(const std::filesystem::path& filepath);
+		static VoxelMesh build_from_voxels(uint8_t* voxels, size_t w, size_t h, size_t d, uint32_t* palette, uint32_t materialIndex = 0);
 
 		uint32_t m_MaterialIndex = 0;
 

@@ -44,7 +44,6 @@ namespace Engine {
 		struct
 		{
 			bool Enable = false;
-			uint32_t SFactor = 0, DFactor = 0;
 		} Blend;
 	};
 

@@ -9,6 +9,8 @@ void testbed_update(App&);
 void testbed_stop(App&);
 void testbed_event(Event&);
 
+#include <bitset>
+
 int main()
 {
 	App* app = new App("Engine", 1280, 800);

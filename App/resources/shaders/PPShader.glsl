@@ -18,11 +18,9 @@ uniform vec2 u_ViewportDims;
 in vec2 o_UV;
 
 layout(binding = 2) uniform sampler2D u_PreviousDepth;
-layout(binding = 3) uniform sampler2D u_Albedo;
 layout(binding = 4) uniform sampler2D u_Normal;
 layout(binding = 5) uniform sampler2D u_PreviousNormal;
 layout(binding = 6) uniform sampler2D u_AmbientAccumulation;
-layout(binding = 7) uniform sampler2D u_Lighting;
 
 #include "raytracing.glinc"
 
@@ -91,7 +89,6 @@ void main()
 	float depth = texture(u_DepthTexture, uv).r;
 	if (depth == 1.0f) return;
 
-	vec4 albedo = texture(u_Albedo, uv);
 	vec3 normal = texture(u_Normal, uv).xyz;
 	vec3 worldSpaceFragment = ReconstructWorldSpaceFromDepth(uv);
 	

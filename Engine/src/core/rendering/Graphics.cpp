@@ -196,7 +196,7 @@ namespace Engine {
 
 		set_depth_test(DepthTest::Less);
 		glClearDepth(1.0f);
-		//glEnable(GL_MULTISAMPLE);
+		glLineWidth(2);
 
 		set_face_cull(Face::Back);
 		init_quad();
@@ -245,6 +245,18 @@ namespace Engine {
 		glBlendFunc(sfactor, dfactor);
 	}
 
+	static PrimitiveMode s_PrimitiveDrawMode = PrimitiveMode::Triangles;
+
+	void Graphics::set_draw_mode(PrimitiveMode mode)
+	{
+		s_PrimitiveDrawMode = mode;
+	}
+
+	void Graphics::memory_barrier(uint32_t target)
+	{
+		glMemoryBarrier(target);
+	}
+
 	void Graphics::set_depth_mask(bool mask)
 	{
 		glDepthMask(mask);
@@ -291,14 +303,12 @@ namespace Engine {
 		glColorMask(1, 1, 1, 1); // TODO: save state prob
 		glDepthMask(true);		 // TODO: save state prob
 
-		//uint32_t bufs[] = { GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 };
-		//glDrawBuffers(2, bufs);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	}
 
 	void Graphics::draw_indexed(uint32_t count)
 	{
-		glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, nullptr);
+		glDrawElements((GLenum)s_PrimitiveDrawMode, count, GL_UNSIGNED_INT, nullptr);
 	}
 
 	static Float2 s_ViewportDims;
@@ -328,7 +338,6 @@ namespace Engine {
 
 		shader->set_float2("u_ViewportDims", s_ViewportDims);
 
-		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 	}	
 

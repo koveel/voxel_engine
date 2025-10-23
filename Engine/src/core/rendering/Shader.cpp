@@ -7,10 +7,6 @@
 
 namespace Engine {
 
-	Shader::Shader()
-	{
-	}
-
 	Shader::~Shader()
 	{
 		glDeleteProgram(m_ID);
@@ -57,12 +53,6 @@ namespace Engine {
 		int location = get_or_cache_uniform_location(name.c_str());
 		glProgramUniform4i(m_ID, location, v.x, v.y, v.z, v.w);
 	}
-
-	//void Shader::set_int_array(const std::string& name, int* values, uint32_t count)
-	//{
-	//	int location = get_or_cache_uniform_location(name.c_str());
-	//	glProgramUniform1iv(m_ID, location, count, values);
-	//}
 
 	void Shader::set_float(const std::string& name, float value)
 	{
@@ -274,19 +264,9 @@ namespace Engine {
 		return result;
 	}
 
-	ComputeShader::ComputeShader()
-	{
-	}
-
 	ComputeShader::~ComputeShader()
 	{
 		glDeleteProgram(m_ID);
-	}
-
-	void ComputeShader::bind() const
-	{
-		glUseProgram(m_ID);
-		//glBindProgramPipeline(m_ID);
 	}
 
 	void ComputeShader::dispatch(uint32_t x, uint32_t y, uint32_t z) const

@@ -37,6 +37,12 @@ public:
 	T* operator->() { return m_Ptr; }
 	T* operator->() const { return m_Ptr; }
 
+	void reset(T* ptr = nullptr)
+	{
+		delete m_Ptr;
+		m_Ptr = ptr;
+	}
+
 	operator bool() const { return m_Ptr; }
 private:
 	T* m_Ptr = nullptr;

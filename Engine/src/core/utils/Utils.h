@@ -16,14 +16,26 @@ namespace Engine {
 
 	Image image_load_from_file(const std::filesystem::path& path, bool flipVertically = true);
 
-	//void image_swap_channels(uint8_t* abgr_dest, const uint8_t* rgba_src, uint32_t size);
+	//void image_swap_channels(uint8_t* rgba_dest, const uint8_t* abgr_src, size_t count);
 	//void remap_24bpp_to_32bpp(uint8_t* dest32, const uint8_t* source24, uint32_t width, uint32_t height);
 
 	int find_nth_index_of_char(const std::string& string, size_t n, char c);
 
-	static int flatten_index_3d(Int3 i, Int3 dimensions)
+	static uint32_t encode_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+		return a | (b << 8) | (g << 16) | (r << 24);
+	}
+
+	static uint32_t encode_rgba(Color color) {
+		uint8_t r = static_cast<uint8_t>(color.a * 255.0f);
+		uint8_t g = static_cast<uint8_t>(color.b * 255.0f);
+		uint8_t b = static_cast<uint8_t>(color.g * 255.0f);
+		uint8_t a = static_cast<uint8_t>(color.r * 255.0f);
+		return encode_rgba(r, g, b, a);
+	}
+
+	static size_t flatten_index_3d(Int3 i, Int3 dimensions)
 	{
-		return (i.z * dimensions.z * dimensions.y) + (i.y * dimensions.z) + i.x;
+		return i.x + (i.z * dimensions.z * dimensions.y) + (i.y * dimensions.z);
 	}
 
 }
