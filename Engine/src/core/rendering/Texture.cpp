@@ -178,6 +178,11 @@ namespace Engine {
 		glBindTextureUnit(slot, m_ID);
 	}
 
+	void Texture3D::bind_as_image(uint32_t slot, TextureAccessMode mode, uint32_t mip) const
+	{
+		glBindImageTexture(slot, m_ID, mip, GL_FALSE, 0, (GLenum)mode, m_InternalFormat);
+	}
+
 	owning_ptr<Texture3D> Texture3D::create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
 	{
 		return owning_ptr<Texture3D>(new Texture3D(width, height, depth, format, mips));

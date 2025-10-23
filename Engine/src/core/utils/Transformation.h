@@ -2,6 +2,8 @@
 
 namespace Engine {
 
+	static constexpr inline float VoxelScaleMeters = 0.1f;
+
 	struct Transformation
 	{
 		Float3 Position = { 0.0f, 0.0f, 0.0f };

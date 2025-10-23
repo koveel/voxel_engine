@@ -32,7 +32,7 @@ uniform int u_TextureTileFactor = 1;
 uniform vec3 u_CameraPosition;
 
 uniform int u_MaterialIndex;
-uniform ivec3 u_VoxelDimensions;
+uniform int u_MipLevel = 0;
 
 uniform vec3 u_OBBCenter;
 uniform mat4 u_OBBOrientation;
@@ -72,8 +72,6 @@ vec2 ComputeFaceUV(vec3 local, vec3 normal)
 	else
 		uv = local.xy;
 
-	// Flip horizontally for opposite faces
-	//uv.x = any(lessThan(normal, vec3(0.0f))) ? 1.0f - uv.x : uv.x;
 	uv.x = 1.0f - uv.x;
 
 	return uv;
@@ -84,28 +82,31 @@ void RaymarchVoxelMesh(
 	out int color, out vec3 normal, out float t, out ivec3 voxel, out vec2 uv
 )
 {
-	const float VoxelScale = 0.1f;
+	const float BaseVoxelScale = 0.1f;
+	float voxelScale = BaseVoxelScale * exp2(u_MipLevel);
 
 	// Bounding box
-	vec3 worldspaceExtents = (u_VoxelDimensions * VoxelScale) * 0.5f;
+	ivec3 mipDimensions = textureSize(u_VoxelTexture, u_MipLevel);
+	vec3 worldspaceExtents = (vec3(mipDimensions) * voxelScale) * 0.5f;
 	vec3 p0 = obbCenter - worldspaceExtents;
 	vec3 p1 = obbCenter + worldspaceExtents;
 
 	float hit = RayAABB(rayOrigin, rayDirection, p0, p1);
-	vec3 voxelsPerUnit = u_VoxelDimensions / (p1 - p0);
+	vec3 voxelsPerUnit = mipDimensions / (p1 - p0);
 	vec3 entry = ((rayOrigin + rayDirection * (hit + 0.0001f)) - p0) * voxelsPerUnit;
 	vec3 entryWorldspace = rayOrigin + rayDirection * hit;
 
 	ivec3 step = ivec3(sign(rayDirection));
 	vec3 delta = abs(1.0f / rayDirection);
-	ivec3 pos = ivec3(clamp(floor(entry), vec3(0.0f), vec3(u_VoxelDimensions - 1)));
+	ivec3 pos = ivec3(clamp(floor(entry), vec3(0.0f), vec3(mipDimensions - 1)));
 	vec3 tMax = (vec3(pos) - entry + max(vec3(step), 0.0)) / rayDirection;
 
 	int axis = 0;
-	int maxSteps = u_VoxelDimensions.x + u_VoxelDimensions.y + u_VoxelDimensions.z
+	int maxSteps = mipDimensions.x + mipDimensions.y + mipDimensions.z;
+
 	for (int i = 0; i < maxSteps; i++)
 	{
-		uint col = texelFetch(u_VoxelTexture, pos, 0).r;
+		uint col = texelFetch(u_VoxelTexture, pos, u_MipLevel).r;
 		if (col != 0)
 		{
 			color = int(col);
@@ -173,7 +174,7 @@ void RaymarchVoxelMesh(
 			}
 		}
 
-		if (any(lessThan(pos, ivec3(0))) || any(greaterThanEqual(pos, u_VoxelDimensions)))
+		if (any(lessThan(pos, ivec3(0))) || any(greaterThanEqual(pos, mipDimensions)))
 			break;
 	}
 
@@ -260,6 +261,5 @@ void main()
 	o_Normal = normal;
 
 	vec4 albedo = texelFetch(u_MaterialPalette, ivec2(colorIndex, u_MaterialIndex), 0);
-	//o_Albedo = mix(textured, albedo, 0.75f);
 	o_Albedo = albedo;
 }

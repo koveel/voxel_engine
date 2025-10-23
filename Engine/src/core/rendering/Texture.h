@@ -93,6 +93,8 @@ namespace Engine {
 		void generate_mips();
 
 		void bind(uint32_t slot = 0) const;
+		void bind_as_image(uint32_t slot, TextureAccessMode mode, uint32_t mip = 0) const;
+
 		uint32_t get_handle() const { return m_ID; }
 
 		static owning_ptr<Texture3D> create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips = 1);

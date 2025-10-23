@@ -3,6 +3,7 @@
 #include "VoxelMesh.h"
 #include "Terrain.h"
 
+#include "rendering/Shader.h"
 #include "rendering/Texture.h"
 #include "rendering/scene/SceneRenderer.h"
 
@@ -10,7 +11,78 @@
 
 namespace Engine {
 
-	VoxelMesh Terrain::generate_terrain(const GenerationParameters& params)
+	static constexpr size_t ChunkWidth = 512, ChunkHeight = 16;
+
+	TerrainGenerator::TerrainGenerator()
+	{
+		m_HeightMapSSBO = ShaderStorageBuffer::create(nullptr, ChunkWidth * ChunkWidth * sizeof(float));
+		m_ChunkGenerationShader = ComputeShader::create("resources/shaders/compute/Compute_GenerateTerrain.glsl");
+	}
+
+	VoxelMesh TerrainGenerator::generate_chunk()
+	{
+		static TerrainGenerationParameters parameters = {
+			.noise = {
+				.amplitude = 2.0f,
+				.frequency = 0.5f,
+				.lacunarity = 2.0f,
+				.persistence = 0.7f,
+				.octaves = 4,
+			},
+			.width = ChunkWidth,
+			.height = ChunkHeight,
+		};
+
+		// Height map
+		SimplexNoise noise {
+			parameters.noise.frequency,
+			parameters.noise.amplitude,
+			parameters.noise.lacunarity,
+			parameters.noise.persistence
+		};
+
+		static float* height_map = new float[ChunkWidth * ChunkWidth]{};
+
+		for (uint32_t x = 0; x < ChunkWidth; x++)
+		{
+			for (uint32_t y = 0; y < ChunkWidth; y++)
+			{
+				float fx = (float)x * parameters.noise.scale;
+				float fz = (float)y * parameters.noise.scale;
+				float height = (noise.fractal(parameters.noise.octaves, fx, fz) + 1.0f) / 2.0f; // 0, 1
+
+				size_t index = flatten_index_2d({ x, y }, { ChunkWidth, ChunkWidth });
+				height_map[index] = height;
+			}
+		}
+
+		m_HeightMapSSBO->bind(0);
+		m_HeightMapSSBO->set_data(height_map, ChunkWidth * ChunkWidth * sizeof(float));
+
+		// Generate chunk
+		VoxelMesh chunk_mesh;
+		auto texture = Texture3D::create(ChunkWidth, ChunkHeight, ChunkWidth, TextureFormat::R8UI, 1);
+
+		// direct create and update shadow map (for now)
+		auto& shadowMap = SceneRenderer::s_ShadowMap;
+		if (!shadowMap)
+			shadowMap = Texture3D::create(ChunkWidth, ChunkHeight, ChunkWidth, TextureFormat::R8UI, 3);
+
+		texture->bind_as_image(0, TextureAccessMode::Write, 0);
+		shadowMap->bind_as_image(1, TextureAccessMode::Write, 0);
+
+		m_ChunkGenerationShader->set_int3("u_ChunkDimensions", texture->get_dimensions());
+
+		constexpr uint32_t LocalSizeInShader = 4;
+		m_ChunkGenerationShader->dispatch(ChunkWidth / LocalSizeInShader, ChunkHeight / LocalSizeInShader, ChunkWidth / LocalSizeInShader);
+
+		// Generate mips...
+
+		chunk_mesh.m_Texture = std::move(texture);
+		return chunk_mesh;
+	}
+
+	VoxelMesh TerrainGenerator::generate_terrain(const TerrainGenerationParameters& params)
 	{
 		uint8_t* voxel_data = new uint8_t[params.width * params.height * params.width]{};
 

@@ -17,6 +17,8 @@ namespace Engine {
 
 		owning_ptr<Texture3D> m_Texture;
 		static owning_ptr<Texture2D> s_MaterialPalette;
+
+		static void bind_palette(uint32_t slot);
 	private:
 		uint32_t m_FilledVoxelCount = 0;
 	};

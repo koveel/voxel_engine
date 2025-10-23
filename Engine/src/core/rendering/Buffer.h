@@ -99,4 +99,21 @@ namespace Engine {
 		uint32_t m_ID = 0;
 	};
 
+	class ShaderStorageBuffer
+	{
+	private:
+		ShaderStorageBuffer(const void* data, size_t size);
+	public:
+		~ShaderStorageBuffer();
+
+		void bind(uint32_t slot = 0);
+		void set_data(const void* data, size_t size);
+
+		uint32_t get_handle() const { return m_ID; }
+
+		static owning_ptr<ShaderStorageBuffer> create(const void* data, size_t size);
+	private:
+		uint32_t m_ID = 0;
+	};
+
 }

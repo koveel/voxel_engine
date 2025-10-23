@@ -38,4 +38,9 @@ namespace Engine {
 		return i.x + (i.z * dimensions.z * dimensions.y) + (i.y * dimensions.z);
 	}
 
+	static size_t flatten_index_2d(Int2 i, Int2 dimensions)
+	{
+		return i.x + (i.y * dimensions.x);
+	}
+
 }

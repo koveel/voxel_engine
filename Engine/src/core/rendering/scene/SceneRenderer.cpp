@@ -20,25 +20,24 @@ namespace Engine {
 		s_Projection = camera.get_projection();		
 	}
 
-	void SceneRenderer::draw_entities(const std::vector<VoxelEntity*>& entities)
+	void SceneRenderer::draw_mesh(const VoxelMesh& mesh, const Float3& position, const Float3& euler)
 	{
-		for (auto& e : entities)
-			draw_voxel_entity(*e);
+		Transformation transform = { position, euler, Float3(mesh.m_Texture->get_dimensions()) * VoxelScaleMeters };
+		draw_mesh(mesh, transform);
 	}
 
-	static constexpr float VoxelScaleMeters = 0.1f;
-
-	void SceneRenderer::draw_voxel_entity(const VoxelEntity& entity)
+	void SceneRenderer::draw_mesh(const VoxelMesh& mesh, const Transformation& transform)
 	{
-		const auto& texture = entity.Mesh.m_Texture;
-		const auto& transform = entity.Transform;
+		const auto& texture = mesh.m_Texture;
+		constexpr uint32_t lod = 0;
 
 		Matrix4 rotation = transform.get_rotation();
 		Matrix4 transformation = transform.get_transform();
 
 		s_VoxelMeshShader->bind();
-		s_VoxelMeshShader->set_int3("u_VoxelDimensions", texture->get_dimensions());
-		s_VoxelMeshShader->set_int("u_MaterialIndex", entity.Mesh.m_MaterialIndex);
+		
+		s_VoxelMeshShader->set_int("u_MaterialIndex", mesh.m_MaterialIndex);
+		s_VoxelMeshShader->set_int("u_MipLevel", lod);
 
 		s_VoxelMeshShader->set_float3("u_OBBCenter", transform.Position);
 		s_VoxelMeshShader->set_matrix("u_OBBOrientation", glm::inverse(rotation));
@@ -46,7 +45,7 @@ namespace Engine {
 		s_VoxelMeshShader->set_matrix("u_Transformation", transformation);
 
 		texture->bind();
-		VoxelMesh::s_MaterialPalette->bind(1);
+		VoxelMesh::bind_palette(1);
 		Graphics::draw_cube();
 	}
 
@@ -113,8 +112,8 @@ namespace Engine {
 						};
 
 						// Transform that shit
-						Float3 volumeCenterScaled = volumeCenter + voxelCenterNormalized * (Float3)dimensions * 0.1f;
-						volumeCenterScaled = volumeRotation * Float4(volumeCenterScaled / 0.1f, 1.0f);
+						Float3 volumeCenterScaled = volumeCenter + voxelCenterNormalized * (Float3)dimensions * VoxelScaleMeters;
+						volumeCenterScaled = volumeRotation * Float4(volumeCenterScaled / VoxelScaleMeters, 1.0f);
 
 						// Corresponding cell in environment
 						Int3 cellIndex = (Int3)glm::floor(volumeCenterScaled + 0.05f) + MapDimensions / 2;
@@ -138,13 +137,12 @@ namespace Engine {
 
 	TracedRay SceneRenderer::trace_ray_through_scene(Float3 origin, Float3 direction, float maxDistanceMeters)
 	{
-		constexpr float VoxelScale = 0.1f;
 		Int3 mapDimensions = s_ShadowMap->get_dimensions();
 
-		Float3 worldspaceExtents = (Float3(mapDimensions) * VoxelScale) / 2.0f;
+		Float3 worldspaceExtents = (Float3(mapDimensions) * VoxelScaleMeters) / 2.0f;
 		Float3 boundsMin = -worldspaceExtents;
 
-		Float3 voxelsPerUnit = Float3(1.0f / VoxelScale);
+		Float3 voxelsPerUnit = Float3(1.0f / VoxelScaleMeters);
 
 		Float3 entry = (origin - boundsMin) * voxelsPerUnit;
 		Float3 step = glm::sign(direction);
@@ -163,7 +161,7 @@ namespace Engine {
 			return result;
 		}
 
-		int maxSteps = (int)(maxDistanceMeters / VoxelScale);
+		int maxSteps = (int)(maxDistanceMeters / VoxelScaleMeters);
 		for (int i = 0; i < maxSteps; i++) {
 			Int3 uv = 
 			{ 
@@ -175,7 +173,7 @@ namespace Engine {
 			if (sample != 0) {
 				// Find which axis we just crossed
 				int axis = (tMax.x < tMax.y) ? ((tMax.x < tMax.z) ? 0 : 2) : ((tMax.y < tMax.z) ? 1 : 2);
-				result.t = (tMax[axis] - delta[axis]) * VoxelScale;
+				result.t = (tMax[axis] - delta[axis]) * VoxelScaleMeters;
 				result.hitpoint = origin + direction * result.t;
 				result.sample = sample;
 				result.hit = true;
@@ -221,7 +219,8 @@ namespace Engine {
 	uint8_t SceneRenderer::sample_shadow_map(Int3 cell)
 	{
 		size_t index = flatten_index_3d(cell, s_ShadowMap->get_dimensions());
-		return s_ShadowMap->m_PixelData[index];
+		//return s_ShadowMap->m_PixelData[index];
+		return 0;
 	}
 
 }

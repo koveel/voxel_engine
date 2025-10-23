@@ -42,4 +42,31 @@ namespace Engine {
 		return owning_ptr<IndexBuffer>(new IndexBuffer(indices, count));
 	}
 
+	ShaderStorageBuffer::ShaderStorageBuffer(const void* data, size_t size)
+	{
+		glCreateBuffers(1, &m_ID);
+		glNamedBufferData(m_ID, size, data, GL_DYNAMIC_DRAW);
+	}
+
+	ShaderStorageBuffer::~ShaderStorageBuffer()
+	{
+		glDeleteBuffers(1, &m_ID);
+	}
+
+	void ShaderStorageBuffer::bind(uint32_t slot)
+	{
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_ID);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, slot, m_ID);
+	}
+
+	void ShaderStorageBuffer::set_data(const void* data, size_t size)
+	{
+		glNamedBufferSubData(m_ID, 0, size, data);
+	}
+
+	owning_ptr<ShaderStorageBuffer> ShaderStorageBuffer::create(const void* data, size_t size)
+	{
+		return owning_ptr<ShaderStorageBuffer>(new ShaderStorageBuffer(data, size));
+	}
+
 }

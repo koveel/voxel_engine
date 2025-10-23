@@ -57,8 +57,6 @@ namespace Engine {
 		void dispatch(uint32_t x, uint32_t y, uint32_t z = 1) const;
 
 		static owning_ptr<ComputeShader> create(const std::filesystem::path& filepath);
-	//private:
-	//	uint32_t m_ID = 0;
 	};
 
 }

@@ -53,39 +53,10 @@ static owning_ptr<Texture2D> blueNoise;
 static owning_ptr<Texture2D> crosshair;
 static owning_ptr<Texture2D> testTexture;
 
-static VoxelEntity simplex_chunk;
+static VoxelMesh simplex_chunk;
+static owning_ptr<TerrainGenerator> s_TerrainGen;
 
 static Matrix4 s_PreviousViewProjection = Matrix4(1.0f);
-
-static const std::vector<VoxelEntity*> ENTITIES_TO_RENDER = {
-	&simplex_chunk
-};
-
-static Terrain::GenerationParameters s_TerrainParams =
-{
-	.noise = {
-		.amplitude = 2.0f,
-		.frequency = 0.5f,
-		.lacunarity = 2.0f,
-		.persistence = 0.7f,
-		.octaves = 4
-	},
-	.width = 1024,
-	.height = 16,
-};
-
-static void generate_terrain()
-{
-	auto& noise = s_TerrainParams.noise;
-	noise.amplitude = glm::clamp(noise.amplitude, 0.1f, 2.0f);
-	noise.frequency = glm::clamp(noise.frequency, 0.1f, 2.0f);
-	noise.lacunarity = glm::clamp(noise.lacunarity, 0.1f, 4.0f);
-	noise.persistence = glm::clamp(noise.persistence, 0.1f, 4.0f);
-	noise.octaves = glm::clamp(noise.octaves, 1u, 6u);
-
-	simplex_chunk.Mesh = Terrain::generate_terrain(s_TerrainParams);
-	simplex_chunk.Transform.Scale = (Float3)simplex_chunk.Mesh.m_Texture->get_dimensions() * 0.1f;
-}
 
 static void create_framebuffer(uint32_t screen_width, uint32_t screen_height)
 {
@@ -174,7 +145,6 @@ static void init_renderpass()
 
 static void load_models()
 {
-
 	auto load = [](VoxelEntity& obj, auto path, Float3 pos)
 	{
 		obj.Mesh = VoxelMesh::load_from_file(path);
@@ -183,9 +153,6 @@ static void load_models()
 	};
 
 	load(gas_tank, "resources/models/gas_tank_22.png", {});
-	generate_terrain();
-	return;
-
 	load(blue_car, "resources/models/blue_car_13.png", { -4.0f, 0.0f, -2.0f });
 	load(box, "resources/models/box_120.png", {});
 	load(transformer, "resources/models/transformer_57.png", { -5.0f, 3.05f, 0.05f });
@@ -198,13 +165,15 @@ void testbed_start(App& app)
 	Window* window = app.get_window();
 
 	cameraController.m_Camera = &camera;
-	cameraController.m_TargetPosition = { -3.0f, 4.0f, 0.0f };
-	cameraController.m_TargetEuler = { 0.0f, -90.0f, 0.0f };
+	cameraController.m_TargetPosition = { -4.0f, 2.4f, -0.7f };
+	cameraController.m_TargetEuler = { -30.0f, -90.0f, 0.0f };
 
 	create_framebuffer(window->get_width(), window->get_height());
 	reload_all_shaders();
 	init_renderpass();
-	load_models();
+
+	s_TerrainGen = make_owning<TerrainGenerator>();
+	simplex_chunk = s_TerrainGen->generate_chunk();
 
 	blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
 	blueNoise->set_wrap_mode(TextureWrapMode::Repeat);
@@ -272,32 +241,6 @@ void testbed_update(App& app)
 
 	handle_scene_view_ray_trace(cameraController.get_transform());
 
-	auto last = s_TerrainParams;
-	if (Input::was_key_pressed(Key::Y))
-		s_TerrainParams.noise.amplitude += 0.1f * Input::is_key_down(Key::Tab) ? -1.0f : 1.0f;
-	if (Input::was_key_pressed(Key::U))
-		s_TerrainParams.noise.frequency += 0.1f * (Input::is_key_down(Key::Tab) ? -1.0f : 1.0f);
-	if (Input::was_key_pressed(Key::I))
-		s_TerrainParams.noise.lacunarity += 0.1f * Input::is_key_down(Key::Tab) ? -1.0f : 1.0f;
-	if (Input::was_key_pressed(Key::O)) 
-		s_TerrainParams.noise.persistence += 0.1f * (Input::is_key_down(Key::Tab) ? -1.0f : 1.0f);
-	if (Input::was_key_pressed(Key::P))
-		s_TerrainParams.noise.octaves += Input::is_key_down(Key::Tab) ? -1 : 1;
-
-	if (Input::was_key_pressed(Key::P))
-	{
-		LOG(s_TerrainParams.noise.amplitude);
-		LOG(s_TerrainParams.noise.frequency);
-		LOG(s_TerrainParams.noise.lacunarity);
-		LOG(s_TerrainParams.noise.persistence);
-		LOG(s_TerrainParams.noise.octaves);
-	}
-
-	if (memcmp(&s_TerrainParams, &last, sizeof(s_TerrainParams)) != 0)
-	{
-		generate_terrain();
-	}
-
 	// GEOMETRY PASS
 	renderPipeline.submit_pass(rp_Geometry, [&]()
 	{
@@ -315,7 +258,7 @@ void testbed_update(App& app)
 		if (Input::is_key_down(Key::M))
 			SceneRenderer::draw_shadow_map();
 		else
-			SceneRenderer::draw_entities(ENTITIES_TO_RENDER);
+			SceneRenderer::draw_mesh(simplex_chunk, {}, {});
 	});
 
 	static Float3 lightPos = { -3.0f, 5.0f, 2.0f };
@@ -368,8 +311,17 @@ void testbed_update(App& app)
 
 	bool ssao = false;
 	Texture2D* fresh_ao_texture = s_Framebuffer->m_ColorAttachments[3].get(); // For final composite
+	
+	bool show_ao = !Input::is_key_down(Key::A_9);
+	if (!show_ao)
+	{
+		float v = 1.0f;
+		s_Framebuffer->m_ColorAttachments[3]->clear_to(&v);
+		s_Framebuffer->m_ColorAttachments[4]->clear_to(&v);
+	}
+
 	// COMPUTE AO
-	if (!ssao)
+	if (!ssao && show_ao)
 	{
 		ComputeAOShader->bind();
 
@@ -479,9 +431,8 @@ void testbed_update(App& app)
 		Graphics::set_draw_mode(PrimitiveMode::LineStrip);
 		// Bounding boxes
 		if (render_outline)
-		for (VoxelEntity* pentity : ENTITIES_TO_RENDER)
 		{
-			Transformation t = pentity->Transform;
+			Transformation t = { {}, {}, Float3(simplex_chunk.m_Texture->get_dimensions()) * VoxelScaleMeters };
 			auto transformation = t.get_transform();
 
 			DefaultMeshShader->set_float4("u_Color", { 0.9f, 0.9f, 0.1f, 0.4f });

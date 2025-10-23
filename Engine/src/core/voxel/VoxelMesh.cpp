@@ -83,18 +83,7 @@ namespace Engine {
 	owning_ptr<Texture2D> VoxelMesh::s_MaterialPalette;
 
 	VoxelMesh VoxelMesh::load_from_file(const std::filesystem::path& filepath)
-	{
-		// TODO: store elsewhere
-		if (!s_MaterialPalette) {
-			static constexpr uint32_t PALETTE_MATS_COUNT = 16;
-			s_MaterialPalette = Texture2D::create(256, PALETTE_MATS_COUNT, TextureFormat::RGBA8);
-
-			// Init default palette
-			uint32_t defaultPalette[256]{};
-			defaultPalette[1] = 0xffffffff;
-			s_MaterialPalette->set_data(defaultPalette, 0, 0, 256, 1);
-		}
-
+	{	
 		// TODO: better way of doin ts
 		std::string path = filepath.string();
 		auto sub = path.substr(path.find_last_of('_') + 1, path.find_last_of('.') - path.find_last_of('_') - 1);
@@ -138,6 +127,26 @@ namespace Engine {
 		s_MaterialPalette->set_data(palette, 0, materialIndex, 0, 1);
 
 		return mesh;
+	}
+
+	void VoxelMesh::bind_palette(uint32_t slot)
+	{
+		if (!s_MaterialPalette) {
+			static constexpr uint32_t PALETTE_MATS_COUNT = 16;
+			s_MaterialPalette = Texture2D::create(256, PALETTE_MATS_COUNT, TextureFormat::RGBA8);
+			
+			// default palette
+			uint32_t debug_heightmap_palette[256]{};
+			debug_heightmap_palette[0] = encode_rgba(0, 0, 0, 0);
+			for (int i = 1; i < 16; i++)
+			{
+				debug_heightmap_palette[i] = encode_rgba(Color(i, i, i, 16.0f) / 16.0f);
+			}
+
+			s_MaterialPalette->set_data(debug_heightmap_palette, 0, 0, 256, 1);
+		}
+
+		s_MaterialPalette->bind(slot);
 	}
 
 
