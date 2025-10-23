@@ -96,22 +96,20 @@ void RaymarchVoxelMesh(
 	vec3 entry = ((rayOrigin + rayDirection * (hit + 0.0001f)) - p0) * voxelsPerUnit;
 	vec3 entryWorldspace = rayOrigin + rayDirection * hit;
 
-	vec3 step = sign(rayDirection);
+	ivec3 step = ivec3(sign(rayDirection));
 	vec3 delta = abs(1.0f / rayDirection);
-	vec3 pos = clamp(floor(entry), vec3(0.0f), vec3(u_VoxelDimensions));
-	vec3 tMax = (pos - entry + max(step, 0.0)) / rayDirection;
+	ivec3 pos = ivec3(clamp(floor(entry), vec3(0.0f), vec3(u_VoxelDimensions - 1)));
+	vec3 tMax = (vec3(pos) - entry + max(vec3(step), 0.0)) / rayDirection;
 
 	int axis = 0;
-	int maxSteps = u_VoxelDimensions.x + u_VoxelDimensions.y + u_VoxelDimensions.z;
+	int maxSteps = u_VoxelDimensions.x + u_VoxelDimensions.y + u_VoxelDimensions.z
 	for (int i = 0; i < maxSteps; i++)
 	{
-		ivec3 voxelPos = ivec3(pos);
-
-		uint col = texelFetch(u_VoxelTexture, voxelPos, 0).r;
+		uint col = texelFetch(u_VoxelTexture, pos, 0).r;
 		if (col != 0)
 		{
 			color = int(col);
-			voxel = voxelPos;			
+			voxel = pos;			
 
 			// edge voxel
 			if (i == 0)
@@ -138,7 +136,7 @@ void RaymarchVoxelMesh(
 			}
 
 			normal = vec3(0.0f);
-			normal[axis] = -step[axis];
+			normal[axis] = -float(step[axis]);
 			t = hit + (tMax[axis] - delta[axis]) / voxelsPerUnit[axis];
 			
 			// uv
@@ -150,44 +148,33 @@ void RaymarchVoxelMesh(
 			return;
 		}
 
-		if (tMax.x < tMax.y)
-		{
-			if (tMax.x < tMax.z)
-			{
+		if (tMax.x < tMax.y) {
+			if (tMax.x < tMax.z) {
 				pos.x += step.x;
-				if (pos.x < 0 || pos.x >= u_VoxelDimensions.x)
-					break;
 				tMax.x += delta.x;
 				axis = 0;
 			}
-			else
-			{
+			else {
 				pos.z += step.z;
-				if (pos.z < 0 || pos.z >= u_VoxelDimensions.z)
-					break;
 				tMax.z += delta.z;
 				axis = 2;
 			}
 		}
-		else
-		{
-			if (tMax.y < tMax.z)
-			{
+		else {
+			if (tMax.y < tMax.z) {
 				pos.y += step.y;
-				if (pos.y < 0 || pos.y >= u_VoxelDimensions.y)
-					break;
 				tMax.y += delta.y;
 				axis = 1;
 			}
-			else
-			{
+			else {
 				pos.z += step.z;
-				if (pos.z < 0 || pos.z >= u_VoxelDimensions.z)
-					break;
 				tMax.z += delta.z;
 				axis = 2;
 			}
 		}
+
+		if (any(lessThan(pos, ivec3(0))) || any(greaterThanEqual(pos, u_VoxelDimensions)))
+			break;
 	}
 
 	discard;

@@ -70,7 +70,7 @@ static Terrain::GenerationParameters s_TerrainParams =
 		.persistence = 0.7f,
 		.octaves = 4
 	},
-	.width = 8192,
+	.width = 1024,
 	.height = 16,
 };
 
