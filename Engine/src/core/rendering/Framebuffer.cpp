@@ -7,6 +7,18 @@
 
 namespace Engine {
 
+	static bool depth_format_has_stencil(TextureFormat format)
+	{
+		switch (format)
+		{
+		case TextureFormat::Depth24Stencil8:
+		case TextureFormat::Depth32FStencil8:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	Framebuffer::Framebuffer(const FramebufferDescriptor& descriptor)
 	{
 		glCreateFramebuffers(1, &m_ID);
@@ -30,21 +42,10 @@ namespace Engine {
 		}
 		if (auto pDepthStencil = descriptor.pDepthStencilAttachment)
 		{
-			TextureFormat format;
-			switch (pDepthStencil->DepthBits)
-			{
-			case 16: format = TextureFormat::Depth16; break;
-			case 24: 
-			{
-				format = pDepthStencil->Stencil ? TextureFormat::Depth24Stencil8 : TextureFormat::Depth24;
-				break;
-			}
-			case 32: format = TextureFormat::Depth32; break;
-			default: ASSERT(false);
-			}
+			owning_ptr<Texture2D> texture = Texture2D::create(pDepthStencil->Width, pDepthStencil->Height, pDepthStencil->Format);
 
-			owning_ptr<Texture2D> texture = Texture2D::create(pDepthStencil->Width, pDepthStencil->Height, format);
-			glNamedFramebufferTexture(m_ID, pDepthStencil->Stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, texture->get_handle(), 0);
+			bool hasStencil = depth_format_has_stencil(pDepthStencil->Format);
+			glNamedFramebufferTexture(m_ID, hasStencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, texture->get_handle(), 0);
 
 			m_DepthStencilAttachment = std::move(texture);
 		}
@@ -70,7 +71,7 @@ namespace Engine {
 		glNamedFramebufferDrawBuffers(m_ID, m_ClearBuffersCount, m_ClearBuffers);
 		Graphics::clear(color);
 		glNamedFramebufferDrawBuffers(m_ID, m_DrawBuffersCount, m_DrawBuffers);
-	}
+	}	
 
 	void Framebuffer::resize(uint32_t width, uint32_t height)
 	{
@@ -88,7 +89,7 @@ namespace Engine {
 		if (m_DepthStencilAttachment)
 		{
 			TextureFormat format = m_DepthStencilAttachment->get_format();
-			bool hasStencil = format == TextureFormat::Depth24Stencil8;
+			bool hasStencil = depth_format_has_stencil(format);
 
 			const owning_ptr<Texture2D>& texture = m_DepthStencilAttachment;
 			m_DepthStencilAttachment = Texture2D::create(width, height, format);

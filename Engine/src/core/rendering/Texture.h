@@ -21,6 +21,7 @@ namespace Engine {
 		Depth32 = 0x81A7,
 
 		Depth24Stencil8 = 0x88F0,
+		Depth32FStencil8 = 0x8CAD,
 	};
 
 	enum class TextureFilterMode

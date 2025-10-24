@@ -15,8 +15,7 @@ namespace Engine {
 		struct DepthStencilAttachment
 		{
 			uint32_t Width = 0, Height = 0;
-			uint32_t DepthBits = 24;
-			bool Stencil = false;
+			TextureFormat Format = TextureFormat::Depth24Stencil8;
 		};
 
 		std::vector<ColorAttachment> ColorAttachments;

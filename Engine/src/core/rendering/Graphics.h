@@ -49,7 +49,7 @@ namespace Engine {
 	public:
 		static void init();
 
-		static void clear(const Color& color, float depth = 1.0f);
+		static void clear(const Color& color, float depth = 0.0f);
 		static void draw_indexed(uint32_t count);
 
 		static void set_color_mask(uint32_t buf, bool r, bool g, bool b, bool a);

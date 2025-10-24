@@ -187,6 +187,7 @@ float LinearizeDepth(vec3 p)
 {
 	vec4 clipPos = u_ViewProjection * vec4(p, 1.0f);
 	vec3 ndc = clipPos.xyz / clipPos.w;
+	//return 1.0f - ((ndc.z + 1.0f) / 2.0f);
 	return (ndc.z + 1.0f) / 2.0f;
 }
 

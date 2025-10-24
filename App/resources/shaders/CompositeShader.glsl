@@ -17,6 +17,7 @@ layout(binding = 0) uniform sampler2D u_Albedo;
 layout(binding = 1) uniform sampler2D u_Normals;
 layout(binding = 2) uniform sampler2D u_ComputeAO;
 layout(binding = 3) uniform sampler2D u_Lighting;
+layout(binding = 4) uniform sampler2D u_Depth;
 
 uniform vec2 u_ViewportDims;
 
@@ -30,11 +31,14 @@ void main()
 	float ao = texture(u_ComputeAO, uv).r;
 	vec3 normal = texture(u_Normals, uv).xyz;
 	vec4 lighting = texture(u_Lighting, uv);
+	float depth = texture(u_Depth, uv).r;
 
 	const float ambient_contribution = 0.3f;
 
 	vec4 final = mix(albedo, albedo * vec4(vec3(ao), 1.0f), ambient_contribution);
+	o_Color = vec4(vec3(depth), 1.0f);
 	o_Color = final;
+	//o_Color = vec4()
 	//switch (u_Output)
 	//{
 	//case 0: o_Color = final; break;

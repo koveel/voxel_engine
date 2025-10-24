@@ -18,7 +18,8 @@ namespace Engine {
 		struct
 		{
 			bool Write = false;
-			DepthTest Test = DepthTest::Less;
+			//DepthTest Test = DepthTest::Less;
+			DepthTest Test = DepthTest::Greater;
 		} Depth;
 		struct
 		{

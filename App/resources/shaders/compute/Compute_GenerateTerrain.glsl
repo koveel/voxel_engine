@@ -114,7 +114,7 @@ float snoise(vec3 v)
 
 // END SIMPLEX
 
-float GetSimplexHeight(vec3 p)
+float GetSimplexHeightMapValue(vec3 p)
 {
 	float amplitude = 1.2f;
 	float frequency = 0.1f;
@@ -138,26 +138,18 @@ float GetSimplexHeight(vec3 p)
 void main()
 {
 	ivec3 voxel = ivec3(gl_GlobalInvocationID.xyz);
-
 	if (any(greaterThanEqual(voxel, u_ChunkDimensions)))
 		return;
 
 	int index = voxel.z * u_ChunkDimensions.x + voxel.x;
 
 	vec3 p = vec3(voxel) * 0.1f + u_ChunkPositionWorld;
-	//vec3 offset = u_ChunkPositionWorld;
-	//offset.y = 0.0f;
-
-	float height_sample = clamp(GetSimplexHeight(p) * 0.5f + 0.5f, 0.0f, 1.0f);
+	float height_sample = clamp(GetSimplexHeightMapValue(p) * 0.5f + 0.5f, 0.0f, 1.0f);
 
 	int voxel_height = int(height_sample * u_ChunkDimensions.y - 1);
 
-	// 64x16x64
-	// 0..15
-	int height_index = int(height_sample * u_ChunkDimensions.y - 1);
-
 	if (voxel.y < voxel_height) {
-		imageStore(u_ChunkTexture, voxel, uvec4(height_index));
+		imageStore(u_ChunkTexture, voxel, uvec4(voxel_height));
 		imageStore(u_ShadowMap, voxel, uvec4(14));
 	}
 }

@@ -74,7 +74,7 @@ static void create_framebuffer(uint32_t screen_width, uint32_t screen_height)
 		{ screen_width, screen_height, TextureFormat::RGBA8 }, // lighting
 	};
 	FramebufferDescriptor::DepthStencilAttachment depthStencilAttachment = {
-		screen_width, screen_height, 24, true
+		screen_width, screen_height, TextureFormat::Depth32FStencil8
 	};
 	descriptor.pDepthStencilAttachment = &depthStencilAttachment;
 
@@ -455,6 +455,7 @@ void testbed_update(App& app)
 		s_Framebuffer->m_ColorAttachments[0]->bind(0);
 		s_Framebuffer->m_ColorAttachments[1]->bind(1);
 		s_Framebuffer->m_ColorAttachments[6]->bind(3);
+		s_Framebuffer->m_DepthStencilAttachment->bind(4);
 		fresh_ao_texture->bind(2);
 
 		Graphics::draw_fullscreen_triangle(CompositeShader);
@@ -467,7 +468,6 @@ void testbed_update(App& app)
 		DefaultMeshShader->set_int("u_DepthClip", false);
 
 		static bool render_outline = false;
-
 		if (Input::was_key_pressed(Key::B))
 			render_outline = !render_outline;
 
@@ -480,7 +480,18 @@ void testbed_update(App& app)
 				Transformation t = { chunk.position, {}, Float3(chunk.mesh.m_Texture->get_dimensions()) * VoxelScaleMeters };
 				auto transformation = t.get_transform();
 
-				DefaultMeshShader->set_float4("u_Color", { 0.9f, 0.9f, 0.1f, 0.4f });
+				Float3 colors[] =
+				{
+					{ 0.9f, 0.2f, 0.1f },
+					{ 0.2f, 0.2f, 0.9f },
+					{ 0.4f, 0.8f, 0.7f },
+					{ 0.1f, 0.9f, 0.2f },
+					{ 0.6f, 0.1f, 0.9f },
+					{ 0.9f, 0.9f, 0.9f },
+				};
+				Float3 col = colors[(chunk.index.x + chunk.index.y) % std::size(colors)];
+
+				DefaultMeshShader->set_float4("u_Color", Float4(col, 1.0f));
 				DefaultMeshShader->set_matrix("u_Transformation", transformation);
 				Graphics::draw_cube();
 			}

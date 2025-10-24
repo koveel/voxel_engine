@@ -174,7 +174,7 @@ namespace Engine {
 		}
 	}
 
-	static uint32_t create_and_attach_shader_to_program(uint32_t program, ShaderType type, const std::string& source)
+	static uint32_t create_and_attach_shader_to_program(uint32_t program, ShaderType type, const std::string& source, const std::string& name)
 	{
 		uint32_t shader = glCreateShader((GLenum)type);
 
@@ -203,6 +203,7 @@ namespace Engine {
 			//	LOG("[possible {} shader actual line: {}]", shader_type_to_string(type), possibleLine);
 			//}
 
+			LOG("shader compilation failure (\"{}\")", name);
 			LOG(infoLog.data());
 			ASSERT(false && "failed to compile shader");
 		}
@@ -227,7 +228,7 @@ namespace Engine {
 
 		for (int i = 0; i < ShaderTypeCount - noFragmentShader; i++)
 		{
-			uint32_t shader = create_and_attach_shader_to_program(program, i == 0 ? ShaderType::Vertex : ShaderType::Fragment, shaderSources[i]);
+			uint32_t shader = create_and_attach_shader_to_program(program, i == 0 ? ShaderType::Vertex : ShaderType::Fragment, shaderSources[i], filepath.filename().string());
 			shaderIDs.push_back(shader);
 		}
 
@@ -284,7 +285,7 @@ namespace Engine {
 		std::string fileContents = read_file(filepath);
 
 		uint32_t program = glCreateProgram();
-		uint32_t shader = create_and_attach_shader_to_program(program, ShaderType::Compute, fileContents);
+		uint32_t shader = create_and_attach_shader_to_program(program, ShaderType::Compute, fileContents, filepath.filename().string());
 
 		compute->m_ID = program;
 		glLinkProgram(program);

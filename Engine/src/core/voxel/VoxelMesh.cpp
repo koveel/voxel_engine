@@ -138,9 +138,11 @@ namespace Engine {
 			// default palette
 			uint32_t debug_heightmap_palette[256]{};
 			debug_heightmap_palette[0] = encode_rgba(0, 0, 0, 0);
-			for (int i = 1; i < 16; i++)
+			debug_heightmap_palette[1] = encode_rgba(66, 107, 255, 255);
+			int num_heights = 16;
+			for (int i = 2; i < num_heights; i++)
 			{
-				debug_heightmap_palette[i] = encode_rgba(Color(i, i, i, 16.0f) / 16.0f);
+				debug_heightmap_palette[i] = encode_rgba(Color(i, i, i, num_heights) / num_heights);
 			}
 
 			s_MaterialPalette->set_data(debug_heightmap_palette, 0, 0, 256, 1);

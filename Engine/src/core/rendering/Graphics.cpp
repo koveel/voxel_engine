@@ -194,9 +194,11 @@ namespace Engine {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		set_depth_test(DepthTest::Less);
-		glClearDepth(1.0f);
+		//set_depth_test(DepthTest::Less);
+		set_depth_test(DepthTest::Greater);
+		glClearDepth(0.0f);
 		glLineWidth(2);
+		//glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
 
 		set_face_cull(Face::Back);
 		init_quad();

@@ -22,14 +22,15 @@ namespace Engine {
 	int find_nth_index_of_char(const std::string& string, size_t n, char c);
 
 	static uint32_t encode_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-		return a | (b << 8) | (g << 16) | (r << 24);
+		return r | (g << 8) | (g << 16) | (a << 24);
+		//return a | (b << 8) | (g << 16) | (r << 24);
 	}
 
 	static uint32_t encode_rgba(Color color) {
-		uint8_t r = static_cast<uint8_t>(color.a * 255.0f);
-		uint8_t g = static_cast<uint8_t>(color.b * 255.0f);
-		uint8_t b = static_cast<uint8_t>(color.g * 255.0f);
-		uint8_t a = static_cast<uint8_t>(color.r * 255.0f);
+		uint8_t r = static_cast<uint8_t>(color.r * 255.0f);
+		uint8_t g = static_cast<uint8_t>(color.g * 255.0f);
+		uint8_t b = static_cast<uint8_t>(color.b * 255.0f);
+		uint8_t a = static_cast<uint8_t>(color.a * 255.0f);
 		return encode_rgba(r, g, b, a);
 	}
 

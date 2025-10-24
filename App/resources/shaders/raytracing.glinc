@@ -104,7 +104,7 @@ vec3 ReconstructWorldSpaceFromDepth(vec2 uv)
 {
 	float depth = texture(u_DepthTexture, uv).r;
 
-	float z = depth * 2.0f - 1.0f;
+	float z = (1.0f - depth) * 2.0f - 1.0f;
 	vec4 ndcPosition = vec4(uv * 2.0f - 1.0f, z, 1.0f);  // x, y in [-1, 1], z in [-1, 1]
 	vec4 cameraSpacePosition = u_InverseProjection * ndcPosition;
 	cameraSpacePosition /= cameraSpacePosition.w;

@@ -115,19 +115,6 @@ bool RaycastShadowMapVariableFidelity(vec3 origin, vec3 direction, out float t, 
 	return false;
 }
 
-vec3 ReconstructWorldSpaceFromDepth(vec2 uv)
-{
-	float depth = texture(u_Depth, uv).r;
-
-	float z = depth * 2.0f - 1.0f;
-	vec4 ndcPosition = vec4(uv * 2.0f - 1.0f, z, 1.0f);  // x, y in [-1, 1], z in [-1, 1]
-	vec4 cameraSpacePosition = u_InverseProjection * ndcPosition;
-	cameraSpacePosition /= cameraSpacePosition.w;
-
-	vec4 worldPos = u_InverseView * cameraSpacePosition;
-	return worldPos.xyz / worldPos.w;
-}
-
 float CastAmbientOcclusionRay(vec3 origin, vec3 direction)
 {
 	vec3 rayOrigin = origin;
@@ -157,11 +144,31 @@ vec2 GetLastFrameUVFromThisFrameWorldPos(vec3 worldPos)
 	return prevNdc * 0.5f + 0.5f; // -1,1 -> 0, 1
 }
 
+//float LinearizeDepth(float depth)
+//{
+//	const float near = 0.1f, far = 500.0f;
+//	float z = depth * 2.0 - 1.0;
+//	return (2.0 * near * far) / (far + near - z * (far - near));
+//}
+
+vec3 ReconstructWorldSpaceFromDepth(vec2 uv)
+{
+	float depth = texture(u_Depth, uv).r;
+
+	float z = depth * 2.0f - 1.0f;
+	vec4 ndcPosition = vec4(uv * 2.0f - 1.0f, z, 1.0f);  // x, y in [-1, 1], z in [-1, 1]
+	vec4 cameraSpacePosition = u_InverseProjection * ndcPosition;
+	cameraSpacePosition /= cameraSpacePosition.w;
+
+	vec4 worldPos = u_InverseView * cameraSpacePosition;
+	return worldPos.xyz / worldPos.w;
+}
+
 float LinearizeDepth(float depth)
 {
 	const float near = 0.1f, far = 500.0f;
-	float z = depth * 2.0 - 1.0;
-	return (2.0 * near * far) / (far + near - z * (far - near));
+	float z = 1.0f - depth;
+	return (far * near) / (far - z * (far - near));
 }
 
 vec2 GetScreenSpaceMotionVector(vec3 worldPos)
@@ -189,7 +196,8 @@ void main()
 	vec2 uv = (vec2(pixel) + 0.5f) / viewport;
 
 	float depth = texture(u_Depth, uv).r;
-	if (depth == 1.0f)
+	//if (depth == 1.0f)
+	if (depth == 0.0f)
 	{
 		imageStore(u_Output, pixel, vec4(0.0f));
 		return;
