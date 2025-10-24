@@ -7,20 +7,13 @@ namespace Engine {
 	class ComputeShader;
 	class ShaderStorageBuffer;
 
-	struct TerrainGenerationParameters
+	struct TerrainChunk
 	{
-		struct
-		{
-			float amplitude = 0.8f;
-			float frequency = 0.8f;
-			float lacunarity = 0.6f;
-			float persistence = 0.8f;
-			uint32_t octaves = 3;
-			float scale = 1.0f / 30.0f;
-		} noise;
+		static constexpr size_t Width = 1024, Height = 16;
 
-		uint32_t width = 0; // x and z
-		uint32_t height = 0;
+		VoxelMesh mesh;
+		Int2 index{};
+		Float3 position{};
 	};
 
 	class TerrainGenerator
@@ -28,12 +21,15 @@ namespace Engine {
 	public:
 		TerrainGenerator();
 
-		VoxelMesh generate_chunk();
-		void regenerate_chunk(VoxelMesh& mesh, Float3 noiseOffset);
-		VoxelMesh generate_terrain(const TerrainGenerationParameters& params);
+		TerrainChunk generate_chunk(Int2 planar_chunk_index);
+ 		//void regenerate_chunk(VoxelMesh& mesh, Float3 noiseOffset);
+
+		void regenerate_shadowmap(Int2 center_chunk);
 	public:
-		owning_ptr<ShaderStorageBuffer> m_HeightMapSSBO;
+		//owning_ptr<ShaderStorageBuffer> m_HeightMapSSBO;
 		owning_ptr<ComputeShader> m_ChunkGenerationShader;
+
+		//std::vector<VoxelMesh*> m_GeneratedChunks;
 	};
 
 } 

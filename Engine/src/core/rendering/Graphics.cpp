@@ -1,10 +1,10 @@
 #include "pch.h"
 
+#include <glad/glad.h>
 #include "Graphics.h"
 
 #include "Shader.h"
 #include "VertexArray.h"
-#include <glad/glad.h>
 
 #include "gui/Font.h"
 

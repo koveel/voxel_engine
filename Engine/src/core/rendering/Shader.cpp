@@ -273,7 +273,7 @@ namespace Engine {
 	{
 		glUseProgram(m_ID);
 		glDispatchCompute(x, y, z);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	}
 
 	owning_ptr<ComputeShader> ComputeShader::create(const std::filesystem::path& filepath)

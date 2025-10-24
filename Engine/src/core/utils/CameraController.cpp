@@ -63,7 +63,7 @@ namespace Engine {
 		if (m_Camera->get_projection_type() != ProjectionType::Perspective)
 			return;
 
-		m_MoveSpeed = std::min(std::max(m_MoveSpeed += (e.delta * 0.1f), 1.0f), 10.0f);
+		m_MoveSpeed = std::min(std::max(m_MoveSpeed += (e.delta * 0.25f), 0.5f), 50.0f);
 	}
 
 	Matrix4 CameraController::get_view() const

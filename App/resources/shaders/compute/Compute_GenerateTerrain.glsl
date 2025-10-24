@@ -15,8 +15,6 @@ uniform float u_VoxelScale = 0.1f;
 uniform ivec3 u_ChunkDimensions;
 uniform vec3 u_ChunkPositionWorld;
 
-uniform vec3 u_NoiseOffset;
-
 //
 // Description : Array and textureless GLSL 2D/3D/4D simplex 
 //               noise functions.
@@ -147,7 +145,10 @@ void main()
 	int index = voxel.z * u_ChunkDimensions.x + voxel.x;
 
 	vec3 p = vec3(voxel) * 0.1f + u_ChunkPositionWorld;
-	float height_sample = clamp(GetSimplexHeight(p + u_NoiseOffset) * 0.5f + 0.5f, 0.0f, 1.0f);
+	//vec3 offset = u_ChunkPositionWorld;
+	//offset.y = 0.0f;
+
+	float height_sample = clamp(GetSimplexHeight(p) * 0.5f + 0.5f, 0.0f, 1.0f);
 
 	int voxel_height = int(height_sample * u_ChunkDimensions.y - 1);
 
@@ -157,6 +158,6 @@ void main()
 
 	if (voxel.y < voxel_height) {
 		imageStore(u_ChunkTexture, voxel, uvec4(height_index));
-		imageStore(u_ShadowMap, voxel, uvec4(1));
+		imageStore(u_ShadowMap, voxel, uvec4(14));
 	}
 }

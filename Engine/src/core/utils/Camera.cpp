@@ -58,6 +58,7 @@ namespace Engine {
 	{
 		if (m_Type == ProjectionType::Orthographic)
 			m_Projection = glm::ortho(-m_OrthoSize * m_AspectRatio * 0.5f, m_OrthoSize * m_AspectRatio * 0.5f, -m_OrthoSize * 0.5f, m_OrthoSize * 0.5f, m_Near, m_Far);
+
 		if (m_Type == ProjectionType::Perspective)
 			m_Projection = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_Near, m_Far);
 	}

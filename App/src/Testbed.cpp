@@ -53,7 +53,7 @@ static owning_ptr<Texture2D> blueNoise;
 static owning_ptr<Texture2D> crosshair;
 static owning_ptr<Texture2D> testTexture;
 
-static VoxelMesh simplex_chunk;
+static std::vector<TerrainChunk> terrain_chunks;
 static owning_ptr<TerrainGenerator> s_TerrainGen;
 
 static Matrix4 s_PreviousViewProjection = Matrix4(1.0f);
@@ -173,7 +173,16 @@ void testbed_start(App& app)
 	init_renderpass();
 
 	s_TerrainGen = make_owning<TerrainGenerator>();
-	simplex_chunk = s_TerrainGen->generate_chunk();
+
+	constexpr size_t n = 8192 / TerrainChunk::Width;
+	for (int x = 0; x < n; x++)
+	{
+		for (int y = 0; y < n; y++)
+		{
+			Int2 chunk = Int2(x, y) - (int)(n / 2);
+			terrain_chunks.emplace_back(s_TerrainGen->generate_chunk(chunk));
+		}
+	}
 
 	blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
 	blueNoise->set_wrap_mode(TextureWrapMode::Repeat);
@@ -241,19 +250,35 @@ void testbed_update(App& app)
 
 	handle_scene_view_ray_trace(cameraController.get_transform());
 
-	static Float3 noiseOffset = {};
-	Float3 lastNoiseOffset = noiseOffset;
-	if (Input::is_key_down(Key::UpArrow))
-		noiseOffset.z += 3.0f * deltaTime;
-	if (Input::is_key_down(Key::DownArrow))
-		noiseOffset.z -= 3.0f * deltaTime;
-	if (Input::is_key_down(Key::LeftArrow))
-		noiseOffset.x -= 3.0f * deltaTime;
-	if (Input::is_key_down(Key::RightArrow))
-		noiseOffset.x += 3.0f * deltaTime;
-	if (lastNoiseOffset != noiseOffset)
+	//static Float3 noiseOffset = {};
+	//Float3 lastNoiseOffset = noiseOffset;
+	//if (Input::is_key_down(Key::UpArrow))
+	//	noiseOffset.z += 3.0f * deltaTime;
+	//if (Input::is_key_down(Key::DownArrow))
+	//	noiseOffset.z -= 3.0f * deltaTime;
+	//if (Input::is_key_down(Key::LeftArrow))
+	//	noiseOffset.x -= 3.0f * deltaTime;
+	//if (Input::is_key_down(Key::RightArrow))
+	//	noiseOffset.x += 3.0f * deltaTime;
+	//if (lastNoiseOffset != noiseOffset)
+	//{
+	//	//s_TerrainGen->regenerate_chunk(simplex_chunk, noiseOffset);
+	//}
+
+	static Int2 chunk_offset_to_gen = {};
+	Int2 last = chunk_offset_to_gen;
+	if (Input::was_key_pressed(Key::UpArrow))
+		chunk_offset_to_gen.y++;
+	if (Input::was_key_pressed(Key::DownArrow))
+		chunk_offset_to_gen.y--;
+	if (Input::was_key_pressed(Key::LeftArrow))
+		chunk_offset_to_gen.x--;
+	if (Input::was_key_pressed(Key::RightArrow))
+		chunk_offset_to_gen.x++;
+
+	if (chunk_offset_to_gen != last)
 	{
-		s_TerrainGen->regenerate_chunk(simplex_chunk, noiseOffset);
+		terrain_chunks.emplace_back(s_TerrainGen->generate_chunk(chunk_offset_to_gen));
 	}
 
 	// GEOMETRY PASS
@@ -273,7 +298,10 @@ void testbed_update(App& app)
 		if (Input::is_key_down(Key::M))
 			SceneRenderer::draw_shadow_map();
 		else
-			SceneRenderer::draw_mesh(simplex_chunk, {}, {});
+		{
+			for (auto& chunk : terrain_chunks)
+				SceneRenderer::draw_mesh(chunk.mesh, chunk.position, {});
+		}
 	});
 
 	static Float3 lightPos = { -3.0f, 5.0f, 2.0f };
@@ -447,12 +475,15 @@ void testbed_update(App& app)
 		// Bounding boxes
 		if (render_outline)
 		{
-			Transformation t = { {}, {}, Float3(simplex_chunk.m_Texture->get_dimensions()) * VoxelScaleMeters };
-			auto transformation = t.get_transform();
+			for (auto& chunk : terrain_chunks)
+			{
+				Transformation t = { chunk.position, {}, Float3(chunk.mesh.m_Texture->get_dimensions()) * VoxelScaleMeters };
+				auto transformation = t.get_transform();
 
-			DefaultMeshShader->set_float4("u_Color", { 0.9f, 0.9f, 0.1f, 0.4f });
-			DefaultMeshShader->set_matrix("u_Transformation", transformation);
-			Graphics::draw_cube();
+				DefaultMeshShader->set_float4("u_Color", { 0.9f, 0.9f, 0.1f, 0.4f });
+				DefaultMeshShader->set_matrix("u_Transformation", transformation);
+				Graphics::draw_cube();
+			}
 		}
 		Graphics::set_draw_mode(PrimitiveMode::Triangles);
 
