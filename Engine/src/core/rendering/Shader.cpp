@@ -1,9 +1,10 @@
 #include "pch.h"
 
-#include <fstream>
 #include "Shader.h"
+#include "Texture.h"
 
 #include <glad/glad.h>
+#include <fstream>
 
 namespace Engine {
 
@@ -17,11 +18,11 @@ namespace Engine {
 		glUseProgram(m_ID);
 	}
 
-	int Shader::get_or_cache_uniform_location(const char* name)
+	int Shader::get_or_cache_uniform_location(const std::string& name)
 	{
 		int location = -1;
 		if (!m_UniformLocations.count(name))
-			m_UniformLocations[name] = glGetUniformLocation(m_ID, name);
+			m_UniformLocations[name] = glGetUniformLocation(m_ID, name.c_str());
 
 		location = m_UniformLocations[name];
 		//if (location == -1)
@@ -30,58 +31,87 @@ namespace Engine {
 		return location;
 	}
 
-	void Shader::set_int(const std::string& name, int value)
+	template<>
+	void Shader::set(const std::string& name, const int& v)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
-		glProgramUniform1i(m_ID, location, value);
+		int location = get_or_cache_uniform_location(name);
+		glProgramUniform1i(m_ID, location, v);
 	}
-
-	void Shader::set_int2(const std::string& name, const Int2& v)
+	template<>
+	void Shader::set(const std::string& name, const bool& v)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
+		set(name, static_cast<int>(v));
+	}
+	template<>
+	void Shader::set(const std::string& name, const uint32_t& v)
+	{
+		set(name, static_cast<int>(v));
+	}
+	template<>
+	void Shader::set(const std::string& name, const uint64_t& v)
+	{
+		set(name, static_cast<int>(v));
+	}
+	template<>
+	void Shader::set(const std::string& name, const Int2& v)
+	{
+		int location = get_or_cache_uniform_location(name);
 		glProgramUniform2i(m_ID, location, v.x, v.y);
 	}
-
-	void Shader::set_int3(const std::string& name, const Int3& v)
+	template<>
+	void Shader::set(const std::string& name, const Int3& v)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
+		int location = get_or_cache_uniform_location(name);
 		glProgramUniform3i(m_ID, location, v.x, v.y, v.z);
 	}
 
-	void Shader::set_int4(const std::string& name, const Int4& v)
+	template<>
+	void Shader::set(const std::string& name, const Int4& v)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
+		int location = get_or_cache_uniform_location(name);
 		glProgramUniform4i(m_ID, location, v.x, v.y, v.z, v.w);
 	}
 
-	void Shader::set_float(const std::string& name, float value)
+	template<>
+	void Shader::set(const std::string& name, const float& value)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
+		int location = get_or_cache_uniform_location(name);
 		glProgramUniform1f(m_ID, location, value);
 	}
 
-	void Shader::set_float2(const std::string& name, const Float2& v)
+	template<>
+	void Shader::set(const std::string& name, const Float2& v)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
+		int location = get_or_cache_uniform_location(name);
 		glProgramUniform2f(m_ID, location, v.x, v.y);
 	}
 
-	void Shader::set_float3(const std::string& name, const Float3& v)
+	template<>
+	void Shader::set(const std::string& name, const Float3& v)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
+		int location = get_or_cache_uniform_location(name);
 		glProgramUniform3f(m_ID, location, v.x, v.y, v.z);
 	}
 
-	void Shader::set_float4(const std::string& name, const Float4& v)
+	template<>
+	void Shader::set(const std::string& name, const Float4& v)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
+		int location = get_or_cache_uniform_location(name);
 		glProgramUniform4f(m_ID, location, v.x, v.y, v.z, v.w);
 	}
 
-	void Shader::set_matrix(const std::string& name, const Matrix4& v)
+	template<>
+	void Shader::set(const std::string& name, const Matrix4& v)
 	{
-		int location = get_or_cache_uniform_location(name.c_str());
+		int location = get_or_cache_uniform_location(name);
 		glProgramUniformMatrix4fv(m_ID, location, 1, false, glm::value_ptr(v));
+	}
+
+	template<>
+	void Shader::set(const std::string& name, const std::initializer_list<uint64_t>& bindless_textures)
+	{
+		int location = get_or_cache_uniform_location(name);
+		glProgramUniformHandleui64vARB(m_ID, location, bindless_textures.size(), bindless_textures.begin());
 	}
 
 	static std::string read_file(const std::filesystem::path& filepath)

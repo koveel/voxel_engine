@@ -63,7 +63,7 @@ namespace Engine {
 		void bind(uint32_t slot = 0) const;
 		void bind_as_image(uint32_t slot, TextureAccessMode mode) const;
 		uint32_t get_handle() const { return m_ID; }
-		
+				
 		TextureFormat get_format() const { return (TextureFormat)m_InternalFormat; }
 
 		static owning_ptr<Texture2D> load(const std::filesystem::path& filepath);
@@ -102,10 +102,28 @@ namespace Engine {
 
 		uint8_t* m_PixelData = nullptr; // move
 	private:
+		uint64_t get_bindless_image_handle(uint32_t mip = 0) const;
+
+		friend class BindlessTexture3D;
+	private:
 		uint32_t m_ID = 0;
 		uint32_t m_Width = 0, m_Height = 0, m_Depth = 0;
 
 		uint32_t m_InternalFormat, m_DataFormat;
+	};
+
+	class BindlessTexture3D
+	{
+	public:
+		BindlessTexture3D() = default;
+		BindlessTexture3D(const owning_ptr<Texture3D>& texture, uint32_t mip = 0);
+
+		void activate(TextureAccessMode mode);
+		void deactivate();
+
+		uint64_t get_handle() const { return m_Handle; }
+	private:
+		uint64_t m_Handle = 0;
 	};
 
 }

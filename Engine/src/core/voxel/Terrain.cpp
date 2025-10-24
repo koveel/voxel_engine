@@ -13,32 +13,33 @@
 
 namespace Engine {
 
+	static constexpr size_t ShadowMapNumChunks = 3;
+	static constexpr size_t ShadowMapWidth = TerrainChunk::Width * ShadowMapNumChunks;
 
 	TerrainGenerator::TerrainGenerator()
 	{
-		//m_HeightMapSSBO = ShaderStorageBuffer::create(nullptr, TerrainChunk::Width * TerrainChunk::Width * sizeof(float));
 		m_ChunkGenerationShader = ComputeShader::create("resources/shaders/compute/Compute_GenerateTerrain.glsl");
-		m_ChunkGenerationShader->set_int3("u_ChunkDimensions", { TerrainChunk::Width, TerrainChunk::Height, TerrainChunk::Width });
+		m_ShadowMapGenerationShader = ComputeShader::create("resources/shaders/compute/Compute_GenerateShadowmap.glsl");
+
+		Int3 chunk_dimensions = Int3(TerrainChunk::Width, TerrainChunk::Height, TerrainChunk::Width);
+		m_ChunkGenerationShader->set("u_ChunkDimensions", chunk_dimensions);
+		m_ShadowMapGenerationShader->set("u_ChunkDimensions", chunk_dimensions);
+
+		m_ShadowMap = Texture3D::create(ShadowMapWidth, TerrainChunk::Height, ShadowMapWidth, TextureFormat::R8UI, 3);
 	}
 
-	TerrainChunk TerrainGenerator::generate_chunk(Int2 planar_chunk_index)
+	TerrainChunk& TerrainGenerator::generate_chunk(Int2 planar_chunk_index)
 	{
 		// Generate chunk
 		TerrainChunk chunk{};
 
 		auto texture = Texture3D::create(TerrainChunk::Width, TerrainChunk::Height, TerrainChunk::Width, TextureFormat::R8UI, 1);
 
-		// direct create and update shadow map (for now)
-		auto& shadowMap = SceneRenderer::s_ShadowMap;
-		if (!shadowMap)
-			shadowMap = Texture3D::create(TerrainChunk::Width, TerrainChunk::Height, TerrainChunk::Width, TextureFormat::R8UI, 3);
-
 		texture->bind_as_image(0, TextureAccessMode::Write, 0);
-		shadowMap->bind_as_image(1, TextureAccessMode::Write, 0);
 
-		chunk.position = Float3(planar_chunk_index.x, 0.0f, planar_chunk_index.y) * (float)(TerrainChunk::Width);
-		chunk.position *= VoxelScaleMeters;
-		m_ChunkGenerationShader->set_float3("u_ChunkPositionWorld", chunk.position);
+		Float3 position = Float3(planar_chunk_index.x, 0.0f, planar_chunk_index.y) * (float)(TerrainChunk::Width);
+		position *= VoxelScaleMeters;
+		m_ChunkGenerationShader->set("u_ChunkPositionWorld", position);
 		
 		constexpr uint32_t LocalSizeInShader = 4;
 		m_ChunkGenerationShader->dispatch(TerrainChunk::Width / LocalSizeInShader, TerrainChunk::Height / LocalSizeInShader, TerrainChunk::Width / LocalSizeInShader);
@@ -46,33 +47,58 @@ namespace Engine {
 
 		// Generate mips...
 
+		chunk.position = position;
 		chunk.index = planar_chunk_index;
 		chunk.mesh.m_Texture = std::move(texture);
+		chunk.mesh.m_MaterialIndex = 1;
 
-		return chunk;
+		// TODO: streaming (along w chunks)
+		chunk.bindless_image_handle = chunk.mesh.m_Texture;
+		chunk.bindless_image_handle.activate(TextureAccessMode::Read);
+
+		return m_ChunkTable[chunk.index] = std::move(chunk);
 	}
 
-	//void TerrainGenerator::regenerate_chunk(VoxelMesh& mesh, Float3 noiseOffset)
-	//{
-	//	auto& texture = mesh.m_Texture;
-	//	auto& shadowMap = SceneRenderer::s_ShadowMap;
-	//
-	//	static uint8_t v[TerrainChunk::Width * TerrainChunk::Height * TerrainChunk::Width]{};
-	//	texture->set_data(v);
-	//	shadowMap->set_data(v);
-	//
-	//	texture->bind_as_image(0, TextureAccessMode::Write, 0);
-	//	shadowMap->bind_as_image(1, TextureAccessMode::Write, 0);
-	//
-	//	//m_ChunkGenerationShader->set_float3("u_NoiseOffset", noiseOffset);
-	//
-	//	loat3 planar_world = Float3(planar_chunk_index.x, 0.0f, planar_chunk_index.y) / (float)TerrainChunk::Width;
-	//	m_ChunkGenerationShader->set_float3("u_ChunkPositionWorld", planar_world);
-	//
-	//	constexpr uint32_t LocalSizeInShader = 4;
-	//	m_ChunkGenerationShader->dispatch(TerrainChunk::Width / LocalSizeInShader, TerrainChunk::Height / LocalSizeInShader, TerrainChunk::Width / LocalSizeInShader);
-	//
-	//	// Generate mips...
-	//}
+	void TerrainGenerator::generate_shadowmap(Int2 center_chunk)
+	{
+		constexpr size_t ShadowMapNumChunks = 3; // 3x3
+		constexpr size_t LocalSizeInShader = 4;
+		constexpr size_t Width = ShadowMapNumChunks * TerrainChunk::Width / LocalSizeInShader;
+
+		// bind them chunks boy (DEBUG DEBUG)
+		size_t binding = 0;
+		Int2 target_chunk_indices[ShadowMapNumChunks * ShadowMapNumChunks] =
+		{
+			center_chunk + Int2(-1,  1), center_chunk + Int2(0, 1), center_chunk + Int2(1, 1),
+			center_chunk + Int2(-1,  0), center_chunk, center_chunk + Int2(1, 0),
+			center_chunk + Int2(-1, -1), center_chunk + Int2(0, -1), center_chunk + Int2(1, -1),
+		};
+		// vector sbo todo
+
+		uint32_t chunk_count = 0;
+		uint64_t bindless_handles[9]{};
+		for (size_t i = 0; i < std::size(target_chunk_indices); i++)
+		{
+			Int2 index = target_chunk_indices[i];
+			if (!m_ChunkTable.count(index))
+				continue;
+
+			TerrainChunk& chunk = m_ChunkTable[index];
+			uint64_t handle = chunk.bindless_image_handle.get_handle();
+			bindless_handles[i] = handle;
+			chunk_count++;
+		}
+
+		m_ShadowMap->bind_as_image(0, TextureAccessMode::Write);
+		m_ShadowMapGenerationShader->set("u_ChunkHandles", std::initializer_list<uint64_t>{
+			bindless_handles[0], bindless_handles[1], bindless_handles[2],
+			bindless_handles[3], bindless_handles[4], bindless_handles[5],
+			bindless_handles[6], bindless_handles[7], bindless_handles[8],
+		});
+		m_ShadowMapGenerationShader->set("u_ChunkCount", chunk_count);
+		m_ShadowMapGenerationShader->dispatch(Width, TerrainChunk::Height / LocalSizeInShader, Width);
+
+		Graphics::memory_barrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	}
 
 }

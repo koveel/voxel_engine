@@ -338,7 +338,7 @@ namespace Engine {
 		shader->bind();
 		s_FullscreenTriangleVAO->bind();
 
-		shader->set_float2("u_ViewportDims", s_ViewportDims);
+		shader->set("u_ViewportDims", s_ViewportDims);
 
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 	}	

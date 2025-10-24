@@ -5,13 +5,14 @@
 
 #include <stb_image/stb_image.h>
 
+#include "Terrain.h"
+
 namespace Engine {	
 
 	struct VoxelMeshData
 	{
 		uint8_t* voxels = nullptr;
 		uint32_t palette[256]{};
-		uint32_t filled_count = 0;
 	};
 
 	// Generates 8-bit voxel data and corresponding palette from image pixels
@@ -37,7 +38,6 @@ namespace Engine {
 				continue;
 			}
 
-			result.filled_count++;
 			uint32_t voxelColor = encode_rgba(a, b, g, r);
 
 			// SEARCH Try find index of color in palette
@@ -102,7 +102,6 @@ namespace Engine {
 		auto& texture = mesh.m_Texture = Texture3D::create(meshWidth, meshHeight, meshDepth, TextureFormat::R8UI);
 		texture->set_filter_mode(TextureFilterMode::Point);
 		VoxelMeshData voxelData = process_voxel_image_data(image.pixels, meshWidth, meshHeight, meshDepth, image.channels);
-		mesh.m_FilledVoxelCount = voxelData.filled_count;
 
 		// Update palette
 		s_MaterialPalette->set_data(voxelData.palette, 0, mesh.m_MaterialIndex, 0, 1);
@@ -136,16 +135,26 @@ namespace Engine {
 			s_MaterialPalette = Texture2D::create(256, PALETTE_MATS_COUNT, TextureFormat::RGBA8);
 			
 			// default palette
-			uint32_t debug_heightmap_palette[256]{};
-			debug_heightmap_palette[0] = encode_rgba(0, 0, 0, 0);
-			debug_heightmap_palette[1] = encode_rgba(66, 107, 255, 255);
-			int num_heights = 16;
-			for (int i = 2; i < num_heights; i++)
 			{
-				debug_heightmap_palette[i] = encode_rgba(Color(i, i, i, num_heights) / num_heights);
+				uint32_t default_palette[256]{};
+				default_palette[0] = encode_rgba(0, 0, 0, 0);
+				default_palette[1] = encode_rgba(125, 125, 125, 255);
+				s_MaterialPalette->set_data(default_palette, 0, 0, 256, 1);
 			}
 
-			s_MaterialPalette->set_data(debug_heightmap_palette, 0, 0, 256, 1);
+			// heightmap palette
+			{
+				uint32_t debug_heightmap_palette[256]{};
+				debug_heightmap_palette[0] = encode_rgba(0, 0, 0, 0);
+				debug_heightmap_palette[1] = encode_rgba(66, 107, 255, 255);
+				size_t num_heights = TerrainChunk::Height;
+				for (size_t i = 2; i < num_heights; i++)
+				{
+					debug_heightmap_palette[i] = encode_rgba(Color(i, i, i, num_heights) / num_heights);
+				}
+
+				s_MaterialPalette->set_data(debug_heightmap_palette, 0, 1, 256, 1);
+			}
 		}
 
 		s_MaterialPalette->bind(slot);

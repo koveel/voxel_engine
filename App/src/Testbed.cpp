@@ -53,7 +53,6 @@ static owning_ptr<Texture2D> blueNoise;
 static owning_ptr<Texture2D> crosshair;
 static owning_ptr<Texture2D> testTexture;
 
-static std::vector<TerrainChunk> terrain_chunks;
 static owning_ptr<TerrainGenerator> s_TerrainGen;
 
 static Matrix4 s_PreviousViewProjection = Matrix4(1.0f);
@@ -174,15 +173,8 @@ void testbed_start(App& app)
 
 	s_TerrainGen = make_owning<TerrainGenerator>();
 
-	constexpr size_t n = 8192 / TerrainChunk::Width;
-	for (int x = 0; x < n; x++)
-	{
-		for (int y = 0; y < n; y++)
-		{
-			Int2 chunk = Int2(x, y) - (int)(n / 2);
-			terrain_chunks.emplace_back(s_TerrainGen->generate_chunk(chunk));
-		}
-	}
+	s_TerrainGen->generate_chunk({});
+	s_TerrainGen->generate_shadowmap({});
 
 	blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
 	blueNoise->set_wrap_mode(TextureWrapMode::Repeat);
@@ -223,6 +215,28 @@ static Float3 get_highlighted_voxel_center()
 	Float3 cell = Float3(sceneCameraRay.cell);
 	Float3 center = cell * 0.1f + 0.05f;
 	return center;
+}
+
+static void draw_shadow_map()
+{
+	auto& texture = s_TerrainGen->m_ShadowMap;
+	Int3 voxelDimensions = texture->get_dimensions();
+
+	Matrix4 rotation = Matrix4(1.0f);
+	Matrix4 transformation = glm::scale(glm::mat4(1.0f), (Float3)voxelDimensions * VoxelScaleMeters);
+
+	auto& shader = SceneRenderer::s_VoxelMeshShader;
+	shader->bind();
+	shader->set("u_OBBCenter", Float3(0.0f, 0.0f, 0.0f));
+	shader->set("u_OBBOrientation", glm::inverse(rotation));
+	shader->set("u_VoxelDimensions", voxelDimensions);
+	shader->set("u_MaterialIndex", 0);
+
+	shader->set("u_Transformation", transformation);
+
+	texture->bind();
+	VoxelMesh::s_MaterialPalette->bind(1);
+	Graphics::draw_cube();
 }
 
 void testbed_update(App& app)
@@ -278,7 +292,7 @@ void testbed_update(App& app)
 
 	if (chunk_offset_to_gen != last)
 	{
-		terrain_chunks.emplace_back(s_TerrainGen->generate_chunk(chunk_offset_to_gen));
+		s_TerrainGen->generate_chunk(chunk_offset_to_gen);
 	}
 
 	// GEOMETRY PASS
@@ -292,15 +306,17 @@ void testbed_update(App& app)
 		if (Input::was_key_pressed(Key::DownArrow))
 			tile--;
 
-		rp_Geometry.pShader->set_float3("u_CameraPosition", cameraController.get_transform().Position);
-		rp_Geometry.pShader->set_int("u_TextureTileFactor", tile);
+		rp_Geometry.pShader->set("u_CameraPosition", cameraController.get_transform().Position);
+		rp_Geometry.pShader->set("u_TextureTileFactor", tile);
 
 		if (Input::is_key_down(Key::M))
-			SceneRenderer::draw_shadow_map();
+		{
+			draw_shadow_map();
+		}
 		else
 		{
-			for (auto& chunk : terrain_chunks)
-				SceneRenderer::draw_mesh(chunk.mesh, chunk.position, {});
+			for (auto& pair : s_TerrainGen->m_ChunkTable)
+				SceneRenderer::draw_mesh(pair.second.mesh, pair.second.position, {});
 		}
 	});
 
@@ -318,7 +334,7 @@ void testbed_update(App& app)
 		{
 			Graphics::reset_draw_buffers();
 
-			Shader_NoFragment->set_matrix("u_Transformation", lightTransformation);
+			Shader_NoFragment->set("u_Transformation", lightTransformation);
 
 			Graphics::draw_sphere(); // lighting volume mesh
 		});
@@ -331,21 +347,21 @@ void testbed_update(App& app)
 			Graphics::set_blend_function(1, 1); // GL_ONE = 1 = mindblown
 
 			// Matrices
-			LightShader->set_matrix("u_Transformation", lightTransformation);
-			LightShader->set_matrix("u_InverseView", glm::inverse(view));
-			LightShader->set_matrix("u_InverseProjection", glm::inverse(projection));
+			LightShader->set("u_Transformation", lightTransformation);
+			LightShader->set("u_InverseView", glm::inverse(view));
+			LightShader->set("u_InverseProjection", glm::inverse(projection));
 
-			LightShader->set_float("u_LightIntensity", intensity);
-			LightShader->set_float("u_LightRadius", radius);
+			LightShader->set("u_LightIntensity", intensity);
+			LightShader->set("u_LightRadius", radius);
 
 			Float3 color = { 0.9f, 0.9f, 0.05f };
-			LightShader->set_float3("u_Color", color);
-			LightShader->set_float3("u_VolumeCenter", lightPos);
-			LightShader->set_float2("u_ViewportDims", { window->get_width(), window->get_height() });
-			LightShader->set_int("u_FrameNumber", frameNumber);
+			LightShader->set("u_Color", color);
+			LightShader->set("u_VolumeCenter", lightPos);
+			LightShader->set("u_ViewportDims", Float2(window->get_width(), window->get_height()));
+			LightShader->set("u_FrameNumber", frameNumber);
 			s_Framebuffer->m_DepthStencilAttachment->bind(0);
 			s_Framebuffer->m_ColorAttachments[1]->bind(2);
-			SceneRenderer::get_shadow_map()->bind(1);
+			s_TerrainGen->m_ShadowMap->bind(1);
 			blueNoise->bind(9);
 
 			Graphics::draw_sphere(); // lighting volume mesh
@@ -368,7 +384,7 @@ void testbed_update(App& app)
 	{
 		ComputeAOShader->bind();
 
-		SceneRenderer::get_shadow_map()->bind(0);
+		s_TerrainGen->m_ShadowMap->bind(0);
 		blueNoise->bind(1);
 		s_Framebuffer->m_DepthStencilAttachment->bind(2);
 		s_Framebuffer->m_ColorAttachments[5]->bind(3);
@@ -391,17 +407,18 @@ void testbed_update(App& app)
 			fresh_ao_texture = write.get();
 		}
 
-		ComputeAOShader->set_matrix("u_InverseView", glm::inverse(view));
-		ComputeAOShader->set_matrix("u_InverseProjection", glm::inverse(projection));
-		ComputeAOShader->set_matrix("u_PrevFrameViewProjection", s_PreviousViewProjection);
-		ComputeAOShader->set_matrix("u_ViewProjection", projection * view);
-		ComputeAOShader->set_int("u_FrameNumber", frameNumber);
+		ComputeAOShader->set("u_InverseView", glm::inverse(view));
+		ComputeAOShader->set("u_InverseProjection", glm::inverse(projection));
+		ComputeAOShader->set("u_PrevFrameViewProjection", s_PreviousViewProjection);
+		ComputeAOShader->set("u_ViewProjection", projection * view);
+		ComputeAOShader->set("u_FrameNumber", frameNumber);
 
 		uint32_t localSizeX = 16, localSizeY = 16;
 		ComputeAOShader->dispatch(
 			(viewport.x + localSizeX - 1) / localSizeX,
 			(viewport.y + localSizeY - 1) / localSizeY
 		);
+		Graphics::memory_barrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	}
 	
 	if (ssao)
@@ -428,9 +445,9 @@ void testbed_update(App& app)
 			fresh_ao_texture = write.get();
 		}
 
-		ComputeSSAOShader->set_matrix("u_InverseView", glm::inverse(view));
-		ComputeSSAOShader->set_matrix("u_InverseProjection", glm::inverse(projection));
-		ComputeSSAOShader->set_matrix("u_ViewProjection", projection * view);
+		ComputeSSAOShader->set("u_InverseView", glm::inverse(view));
+		ComputeSSAOShader->set("u_InverseProjection", glm::inverse(projection));
+		ComputeSSAOShader->set("u_ViewProjection", projection * view);
 
 		uint32_t localSizeX = 16, localSizeY = 16;
 		ComputeSSAOShader->dispatch(
@@ -464,8 +481,8 @@ void testbed_update(App& app)
 	Graphics::set_blend_function(0x0302, 0x0303);
 	renderPipeline.submit_pass(rp_DebugGeometry, [&]()
 	{
-		DefaultMeshShader->set_float2("u_ViewportDims", viewport);
-		DefaultMeshShader->set_int("u_DepthClip", false);
+		DefaultMeshShader->set("u_ViewportDims", viewport);
+		DefaultMeshShader->set("u_DepthClip", false);
 
 		static bool render_outline = false;
 		if (Input::was_key_pressed(Key::B))
@@ -475,8 +492,9 @@ void testbed_update(App& app)
 		// Bounding boxes
 		if (render_outline)
 		{
-			for (auto& chunk : terrain_chunks)
+			for (auto& pair : s_TerrainGen->m_ChunkTable)
 			{
+				auto& chunk = pair.second;
 				Transformation t = { chunk.position, {}, Float3(chunk.mesh.m_Texture->get_dimensions()) * VoxelScaleMeters };
 				auto transformation = t.get_transform();
 
@@ -491,8 +509,8 @@ void testbed_update(App& app)
 				};
 				Float3 col = colors[(chunk.index.x + chunk.index.y) % std::size(colors)];
 
-				DefaultMeshShader->set_float4("u_Color", Float4(col, 1.0f));
-				DefaultMeshShader->set_matrix("u_Transformation", transformation);
+				DefaultMeshShader->set("u_Color", Float4(col, 1.0f));
+				DefaultMeshShader->set("u_Transformation", transformation);
 				Graphics::draw_cube();
 			}
 		}
@@ -502,9 +520,9 @@ void testbed_update(App& app)
 		Float3 center = get_highlighted_voxel_center();
 		Float3 scale = Float3(0.1f) + 0.001f;
 		Matrix4 highlight_transform = Transformation(center, {}, scale).get_transform();
-		DefaultMeshShader->set_float4("u_Color", { 1.0f, 1.0f, 1.0f, 0.4f });
-		DefaultMeshShader->set_matrix("u_Transformation", highlight_transform);
-		DefaultMeshShader->set_int("u_DepthClip", true);
+		DefaultMeshShader->set("u_Color", Float4(1.0f, 1.0f, 1.0f, 0.4f));
+		DefaultMeshShader->set("u_Transformation", highlight_transform);
+		DefaultMeshShader->set("u_DepthClip", true);
 		s_Framebuffer->m_DepthStencilAttachment->bind(0);
 
 		Graphics::draw_cube();
@@ -515,42 +533,42 @@ void testbed_update(App& app)
 	{
 		// debug text
 		TextShader->bind();
-		TextShader->set_matrix("u_ViewProjection", pixelProjection);
+		TextShader->set("u_ViewProjection", pixelProjection);
 		{
-			TextShader->set_matrix("u_Transformation",
+			TextShader->set("u_Transformation",
 				Transformation({ 25.0f, viewport.y - 80.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
 			Graphics::draw_text(std::format("ms: {:.3f}", deltaTime * 1000.0f), s_Font);
 		}
 		{
-			TextShader->set_matrix("u_Transformation",
+			TextShader->set("u_Transformation",
 				Transformation({ 25.0f, viewport.y - 160.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
 			Graphics::draw_text(std::format("fps: {:.2f}", 1.0f / deltaTime), s_Font);
 		}
 		// Camera position
 		{
 			Float3 cam = (cameraController.get_transform().Position * 0.001f) * 1000.0f;
-			TextShader->set_matrix("u_Transformation",
+			TextShader->set("u_Transformation",
 				Transformation({ 25.0f, viewport.y - 240.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
 			Graphics::draw_text(std::format("({:.2f}, {:.2f}, {:.2f})", cam.x, cam.y, cam.z), s_Font);
 		}
 		// Highlighted cell
 		{
 			Float3 cell = get_highlighted_voxel_center() - Float3(0.05f);
-			TextShader->set_matrix("u_Transformation",
+			TextShader->set("u_Transformation",
 				Transformation({ 25.0f, viewport.y - 300.0f, 0.0f }, {}, { 40.0f, 40.0f, 1.0f }).get_transform());
 			Graphics::draw_text(std::format("({:.2f}, {:.2f}, {:.2f})", cell.x, cell.y, cell.z), s_Font);
 		}
 
 		// crosshair idfk
 		SpriteShader->bind();
-		SpriteShader->set_float4("u_Tint", { 0.0f, 0.0f, 0.0f, 1.0f });
+		SpriteShader->set("u_Tint", Float4(0.0f, 0.0f, 0.0f, 1.0f));
 		crosshair->bind(0);
-		SpriteShader->set_matrix("u_ViewProjection", pixelProjection);
+		SpriteShader->set("u_ViewProjection", pixelProjection);
 
 		float aspect = viewport.y / viewport.x;
 		Matrix4 transform = Transformation({ viewport.x / 2.0f, viewport.y / 2.0f, 0.0f }, {},
 			{ 100.0f, 100.0f, 1.0f }).get_transform();
-		SpriteShader->set_matrix("u_Transformation", transform);
+		SpriteShader->set("u_Transformation", transform);
 		Graphics::draw_quad();
 	});	
 

@@ -18,7 +18,7 @@ namespace Engine {
 		auto shader = pass.pShader;
 		if (shader) {
 			shader->bind();
-			shader->set_matrix("u_ViewProjection", m_ViewProjectionMatrix);
+			shader->set("u_ViewProjection", m_ViewProjectionMatrix);
 		}
 
 		Graphics::set_face_cull(pass.CullFace);

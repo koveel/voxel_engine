@@ -3,15 +3,8 @@
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 layout(binding = 0, r8ui) uniform writeonly uimage3D u_ChunkTexture;
-layout(binding = 1, r8ui) uniform writeonly uimage3D u_ShadowMap;
-
-layout(std430, binding = 0) readonly buffer HeightBuffer
-{
-	float HeightMap[];
-};
-
-uniform float u_VoxelScale = 0.1f;
-
+//layout(binding = 1, r8ui) uniform writeonly uimage3D u_ShadowMap;
+ 
 uniform ivec3 u_ChunkDimensions;
 uniform vec3 u_ChunkPositionWorld;
 
@@ -116,11 +109,11 @@ float snoise(vec3 v)
 
 float GetSimplexHeightMapValue(vec3 p)
 {
-	float amplitude = 1.2f;
+	float amplitude = 1.0f;
 	float frequency = 0.1f;
-	float lacunarity = 2.0f;
-	float persistence = 0.5f;
-	int octaves = 4;
+	float lacunarity = 1.8f;
+	float persistence = 0.6f;
+	int octaves = 5;
 	float maxAmplitude = 0.0f;
 
 	float result = 0.0f;
@@ -150,6 +143,6 @@ void main()
 
 	if (voxel.y < voxel_height) {
 		imageStore(u_ChunkTexture, voxel, uvec4(voxel_height));
-		imageStore(u_ShadowMap, voxel, uvec4(14));
+		//imageStore(u_ShadowMap, voxel, uvec4(1));
 	}
 }

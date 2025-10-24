@@ -1,5 +1,6 @@
 #pragma once
 
+#include "rendering/Texture.h"
 #include "rendering/Buffer.h"
 
 namespace Engine {
@@ -9,9 +10,10 @@ namespace Engine {
 
 	struct TerrainChunk
 	{
-		static constexpr size_t Width = 1024, Height = 16;
+		static constexpr size_t Width = 1024, Height = 32;
 
 		VoxelMesh mesh;
+		BindlessTexture3D bindless_image_handle;
 		Int2 index{};
 		Float3 position{};
 	};
@@ -21,15 +23,16 @@ namespace Engine {
 	public:
 		TerrainGenerator();
 
-		TerrainChunk generate_chunk(Int2 planar_chunk_index);
- 		//void regenerate_chunk(VoxelMesh& mesh, Float3 noiseOffset);
+		TerrainChunk& generate_chunk(Int2 planar_chunk_index);
 
-		void regenerate_shadowmap(Int2 center_chunk);
+		void generate_shadowmap(Int2 center_chunk);
 	public:
-		//owning_ptr<ShaderStorageBuffer> m_HeightMapSSBO;
 		owning_ptr<ComputeShader> m_ChunkGenerationShader;
+		owning_ptr<ComputeShader> m_ShadowMapGenerationShader;
 
-		//std::vector<VoxelMesh*> m_GeneratedChunks;
+		std::unordered_map<Int2, TerrainChunk> m_ChunkTable;
+
+		owning_ptr<Texture3D> m_ShadowMap;
 	};
 
 } 

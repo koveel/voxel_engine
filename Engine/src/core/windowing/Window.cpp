@@ -122,8 +122,9 @@ namespace Engine {
 		glfwSwapInterval(1);
 		glfwSetWindowUserPointer(m_Handle, this);
 
-		//int monitorCount = 0;
-		//GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+		// TODO: use this elsewhere... and fallback to texture arrays if false
+		bool bindless_texture_support = glfwExtensionSupported("GL_ARB_bindless_texture");
+		LOG("support for GL_ARB_bindless_texture = {}", bindless_texture_support);
 
 		// Set callbacks
 		glfwSetWindowCloseCallback(m_Handle, callback_window_close);

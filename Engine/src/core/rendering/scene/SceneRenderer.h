@@ -28,18 +28,18 @@ namespace Engine {
 		static void draw_mesh(const VoxelMesh& mesh, const Float3& position, const Float3& euler);
 		static void draw_mesh(const VoxelMesh& mesh, const Transformation& transform);
 
-		static void draw_shadow_map();
+		//static void draw_shadow_map();
 
-		static void generate_shadow_map(const std::vector<VoxelEntity*>& entities);
+		//static void generate_shadow_map(const std::vector<VoxelEntity*>& entities);
 
 		static TracedRay trace_ray_through_scene(Float3 origin, Float3 direction, float maxDistanceMeters);
 
-		static Texture3D* get_shadow_map() { return s_ShadowMap.get(); }
+		//static Texture3D* get_shadow_map() { return s_ShadowMap.get(); }
 	public:
 		static uint8_t sample_shadow_map(Int3 cell);
 	public:
 		static Matrix4 s_View, s_Projection;
-		static owning_ptr<Texture3D> s_ShadowMap;
+		//static owning_ptr<Texture3D> s_ShadowMap;
 	public:
 		static RenderPipeline s_RenderPipeline;
 		static owning_ptr<Shader> s_VoxelMeshShader;
