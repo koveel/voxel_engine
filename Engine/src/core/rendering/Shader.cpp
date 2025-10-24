@@ -225,17 +225,9 @@ namespace Engine {
 
 			glDeleteShader(shader);
 
-			// this shit sucks
-			//long possibleLine = 0;
-			//if (possibleLine = strtol(&infoLog[2], nullptr, 10))
-			//{
-			//	possibleLine += std::count(source, source, '\n');
-			//	LOG("[possible {} shader actual line: {}]", shader_type_to_string(type), possibleLine);
-			//}
-
 			LOG("shader compilation failure (\"{}\")", name);
 			LOG(infoLog.data());
-			ASSERT(false && "failed to compile shader");
+			ASSERT(false);
 		}
 
 		glAttachShader(program, shader);

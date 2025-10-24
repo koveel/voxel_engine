@@ -16,11 +16,11 @@ void main()
 {
 	ivec3 global_voxel = ivec3(gl_GlobalInvocationID.xyz);
 
-	const ivec2 GridSize = ivec2(3, 3);
+	const int GridSize = 3;
 	ivec3 total_bounds = ivec3(
-		u_ChunkDimensions.x * GridSize.x,
+		u_ChunkDimensions.x * GridSize,
 		u_ChunkDimensions.y,
-		u_ChunkDimensions.z * GridSize.y
+		u_ChunkDimensions.z * GridSize
 	);
 	
 	if (any(greaterThanEqual(global_voxel, total_bounds)))
@@ -31,7 +31,7 @@ void main()
 		global_voxel.z / u_ChunkDimensions.z
 	);
 	
-	int chunk_index = chunk_index2D.y * GridSize.x + chunk_index2D.x;
+	int chunk_index = chunk_index2D.y * GridSize + chunk_index2D.x;
 	ivec3 local_voxel = ivec3(
 		global_voxel.x % u_ChunkDimensions.x,
 		global_voxel.y,

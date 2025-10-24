@@ -20,6 +20,8 @@ uniform mat4 u_InverseProjection;
 uniform mat4 u_PrevFrameViewProjection;
 uniform int u_FrameNumber;
 
+uniform vec3 u_CameraPos;
+
 const float g_BaseVoxelScale = 0.1f;
 const float g_ShadowLODScales[3] = float[3](g_BaseVoxelScale, g_BaseVoxelScale * 2.0f, g_BaseVoxelScale * 4.0f);
 
@@ -76,19 +78,20 @@ bool RaycastShadowMapVariableFidelity(vec3 origin, vec3 direction, out float t, 
 	vec3 voxelsPerUnit = vec3(1.0f / voxelScale);
 
 	vec3 entry = (origin - boundsMin) * voxelsPerUnit;
+
+	// early exit
+	if (any(lessThan(entry, vec3(0))) || any(greaterThanEqual(entry, vec3(mapDimensions)))) {
+		t = float(maxDistanceMeters);
+		return false;
+	}
+
 	vec3 step = sign(direction);
 	vec3 delta = abs(1.0f / direction);
 	ivec3 pos = ivec3(clamp(floor(entry), vec3(0.0f), vec3(mapDimensions - 1)));
 	vec3 tMax = (vec3(pos) - entry + max(step, 0.0)) / direction;
 
 	int maxSteps = int(maxDistanceMeters / voxelScale);
-	ivec3 iStep = ivec3(step);
-
-	// early exit
-	if (any(lessThan(pos, ivec3(0))) || any(greaterThanEqual(pos, mapDimensions))) {
-		t = float(maxDistanceMeters);
-		return false;
-	}
+	ivec3 iStep = ivec3(step);	
 
 	for (int i = 0; i < maxSteps; i++) {
 		if (texelFetch(u_ShadowMap, pos, mipLevel).r != 0) {
@@ -144,13 +147,6 @@ vec2 GetLastFrameUVFromThisFrameWorldPos(vec3 worldPos)
 	return prevNdc * 0.5f + 0.5f; // -1,1 -> 0, 1
 }
 
-//float LinearizeDepth(float depth)
-//{
-//	const float near = 0.1f, far = 500.0f;
-//	float z = depth * 2.0 - 1.0;
-//	return (2.0 * near * far) / (far + near - z * (far - near));
-//}
-
 vec3 ReconstructWorldSpaceFromDepth(vec2 uv)
 {
 	float depth = texture(u_Depth, uv).r;
@@ -196,15 +192,24 @@ void main()
 	vec2 uv = (vec2(pixel) + 0.5f) / viewport;
 
 	float depth = texture(u_Depth, uv).r;
-	//if (depth == 1.0f)
 	if (depth == 0.0f)
+	{
+		imageStore(u_Output, pixel, vec4(0.0f));
+		return;
+	}
+	vec3 worldSpaceFragment = ReconstructWorldSpaceFromDepth(uv);
+
+	const float ao_cutoff_distance = 110.0f;
+	vec3 planar_cam = vec3(u_CameraPos.x, 0.0f, u_CameraPos.z);
+	vec3 planar_worldspace = vec3(worldSpaceFragment.x, 0.0f, worldSpaceFragment.z);
+	float cameraDistance = distance(planar_worldspace, planar_cam);
+	if (cameraDistance > ao_cutoff_distance) // cut dat out br
 	{
 		imageStore(u_Output, pixel, vec4(0.0f));
 		return;
 	}
 
 	vec3 normal = texture(u_Normal, uv).xyz;
-	vec3 worldSpaceFragment = ReconstructWorldSpaceFromDepth(uv);
 
 	float this_frame_ao = 0.0f;
 	const int AmbientOcclusionRaysPerPixel = 2;

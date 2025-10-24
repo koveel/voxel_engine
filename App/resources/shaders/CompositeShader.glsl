@@ -21,7 +21,41 @@ layout(binding = 4) uniform sampler2D u_Depth;
 
 uniform vec2 u_ViewportDims;
 
-uniform int u_Output;
+uniform mat4 u_InverseView;
+uniform mat4 u_InverseProjection;
+uniform vec3 u_CameraPos;
+
+vec3 ReconstructWorldSpaceFromDepth(vec2 uv)
+{
+	float depth = texture(u_Depth, uv).r;
+
+	float z = depth * 2.0f - 1.0f;
+	vec4 ndcPosition = vec4(uv * 2.0f - 1.0f, z, 1.0f);  // x, y in [-1, 1], z in [-1, 1]
+	vec4 cameraSpacePosition = u_InverseProjection * ndcPosition;
+	cameraSpacePosition /= cameraSpacePosition.w;
+
+	vec4 worldPos = u_InverseView * cameraSpacePosition;
+	return worldPos.xyz / worldPos.w;
+}
+
+float GetAOFadeFromPixelPosition(vec3 worldPos)
+{
+	const float min_dist = 80.0f;
+	const float range = 30.0f;
+
+	vec3 planarCam = u_CameraPos;
+	planarCam.y = 0.0f;
+	worldPos.y = 0.0f;
+
+	float dist = distance(planarCam, worldPos);
+
+	if (dist < min_dist)
+		return 1.0f;
+
+	float clamped = clamp(dist, min_dist, min_dist + range);
+	float t = (clamped - min_dist) / range;
+	return mix(1.0f, 0.0f, t);
+}
 
 void main()
 {
@@ -31,19 +65,12 @@ void main()
 	float ao = texture(u_ComputeAO, uv).r;
 	vec3 normal = texture(u_Normals, uv).xyz;
 	vec4 lighting = texture(u_Lighting, uv);
-	float depth = texture(u_Depth, uv).r;
 
 	const float ambient_contribution = 0.3f;
 
-	vec4 final = mix(albedo, albedo * vec4(vec3(ao), 1.0f), ambient_contribution);
-	o_Color = vec4(vec3(depth), 1.0f);
+	vec3 worldSpaceFragment = ReconstructWorldSpaceFromDepth(uv);
+	float ao_dist_fade = GetAOFadeFromPixelPosition(worldSpaceFragment);
+
+	vec4 final = mix(albedo, albedo * vec4(vec3(ao * ao_dist_fade), 1.0f), ambient_contribution);
 	o_Color = final;
-	//o_Color = vec4()
-	//switch (u_Output)
-	//{
-	//case 0: o_Color = final; break;
-	//case 1: o_Color = albedo; break;
-	//case 2: o_Color = vec4(normal, 1.0f); break;
-	//case 3: o_Color = vec4(0.0f, 0.0f, ao, 1.0f);
-	//}
 }

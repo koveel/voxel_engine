@@ -173,7 +173,19 @@ void testbed_start(App& app)
 
 	s_TerrainGen = make_owning<TerrainGenerator>();
 
-	s_TerrainGen->generate_chunk({});
+	Int2 chunks[] =
+	{
+		{-2, 2},  {-1, 2}, {0, 2}, {1, 2},  {2, 2},
+
+		{-2, 1},  {-1, 1}, {0, 1}, {1, 1},  {2, 1},
+		{-2, 0},  {-1, 0}, {0, 0}, {1, 0},  {2, 0},
+		{-2,-1},  {-1,-1}, {0,-1}, {1,-1},  {2,-1},
+
+		{-2,-2},  {-1,-2}, {0,-2}, {1,-2},  {2,-2},
+	};
+
+	for (Int2 i : chunks)
+		s_TerrainGen->generate_chunk(i);
 	s_TerrainGen->generate_shadowmap({});
 
 	blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
@@ -309,7 +321,10 @@ void testbed_update(App& app)
 		rp_Geometry.pShader->set("u_CameraPosition", cameraController.get_transform().Position);
 		rp_Geometry.pShader->set("u_TextureTileFactor", tile);
 
-		if (Input::is_key_down(Key::M))
+		static bool draw_sm = false;
+		if (Input::was_key_pressed(Key::M))
+			draw_sm = !draw_sm;
+		if (draw_sm)
 		{
 			draw_shadow_map();
 		}
@@ -413,6 +428,8 @@ void testbed_update(App& app)
 		ComputeAOShader->set("u_ViewProjection", projection * view);
 		ComputeAOShader->set("u_FrameNumber", frameNumber);
 
+		ComputeAOShader->set("u_CameraPos", cameraController.m_Transformation.Position);
+
 		uint32_t localSizeX = 16, localSizeY = 16;
 		ComputeAOShader->dispatch(
 			(viewport.x + localSizeX - 1) / localSizeX,
@@ -474,6 +491,10 @@ void testbed_update(App& app)
 		s_Framebuffer->m_ColorAttachments[6]->bind(3);
 		s_Framebuffer->m_DepthStencilAttachment->bind(4);
 		fresh_ao_texture->bind(2);
+
+		CompositeShader->set("u_InverseView", glm::inverse(view));
+		CompositeShader->set("u_InverseProjection", glm::inverse(projection));
+		CompositeShader->set("u_CameraPos", cameraController.m_Transformation.Position);
 
 		Graphics::draw_fullscreen_triangle(CompositeShader);
 	});

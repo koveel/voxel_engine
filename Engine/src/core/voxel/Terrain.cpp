@@ -69,9 +69,9 @@ namespace Engine {
 		size_t binding = 0;
 		Int2 target_chunk_indices[ShadowMapNumChunks * ShadowMapNumChunks] =
 		{
-			center_chunk + Int2(-1,  1), center_chunk + Int2(0, 1), center_chunk + Int2(1, 1),
-			center_chunk + Int2(-1,  0), center_chunk, center_chunk + Int2(1, 0),
 			center_chunk + Int2(-1, -1), center_chunk + Int2(0, -1), center_chunk + Int2(1, -1),
+			center_chunk + Int2(-1,  0), center_chunk, center_chunk + Int2(1, 0),
+			center_chunk + Int2(-1,  1), center_chunk + Int2(0, 1), center_chunk + Int2(1, 1),
 		};
 		// vector sbo todo
 
