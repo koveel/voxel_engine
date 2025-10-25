@@ -13,7 +13,7 @@ namespace Engine {
 		static constexpr size_t Width = 1024, Height = 32;
 
 		VoxelMesh mesh;
-		BindlessTexture3D bindless_image_handle;
+		BindlessTexture3D bindless_image;
 		Int2 index{};
 		Float3 position{};
 	};

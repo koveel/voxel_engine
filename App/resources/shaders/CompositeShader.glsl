@@ -68,7 +68,7 @@ void main()
 	vec3 normal = texture(u_Normals, uv).xyz;
 	vec4 lighting = texture(u_Lighting, uv);
 
-	const float ambient_contribution = 0.3f;
+	const float ambient_contribution = 0.5f;
 
 	vec3 worldSpaceFragment = ReconstructWorldSpaceFromDepth(uv);
 	float ao_dist_fade = GetAOFadeFromPixelPosition(worldSpaceFragment);
@@ -79,5 +79,7 @@ void main()
 	{
 	case 0: o_Color = final; break;
 	case 1: o_Color = vec4(ao, 0.0f, 0.0f, 1.0f); break;
+	case 2: o_Color = vec4(worldSpaceFragment, 1.0f); break;
+	case 3: o_Color = vec4(normal, 1.0f); break;
 	}
 }

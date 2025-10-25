@@ -22,7 +22,7 @@ namespace Engine {
 	int find_nth_index_of_char(const std::string& string, size_t n, char c);
 
 	static uint32_t encode_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-		return r | (g << 8) | (g << 16) | (a << 24);
+		return r | (g << 8) | (b << 16) | (a << 24);
 	}
 
 	static uint32_t encode_rgba(Color color) {

@@ -164,7 +164,7 @@ void testbed_start(App& app)
 	Window* window = app.get_window();
 
 	cameraController.m_Camera = &camera;
-	cameraController.m_TargetPosition = { 2.0f, 60.0f, 120.0f };
+	cameraController.m_TargetPosition = { 2.0f, 40.0f, 50.0f };
 	cameraController.m_TargetEuler = { -30.0f, 0.0f, 0.0f };
 
 	create_framebuffer(window->get_width(), window->get_height());
@@ -173,7 +173,7 @@ void testbed_start(App& app)
 
 	s_TerrainGen = make_owning<TerrainGenerator>();
 
-	bool one_chunk_mofo = false;
+	constexpr bool one_chunk_mofo = false;
 	if (one_chunk_mofo)
 		s_TerrainGen->generate_chunk({});
 	else {
@@ -333,7 +333,7 @@ void testbed_update(App& app)
 		rp_Geometry.pShader->set("u_CameraPosition", cameraController.get_transform().Position);
 		rp_Geometry.pShader->set("u_TextureTileFactor", tile);
 
-		static bool draw_sm = 1;
+		static bool draw_sm = false;
 		if (Input::was_key_pressed(Key::M))
 			draw_sm = !draw_sm;
 		if (draw_sm && VoxelMesh::s_MaterialPalette)
@@ -509,6 +509,10 @@ void testbed_update(App& app)
 			output = 0;
 		if (Input::was_key_pressed(Key::A_2))
 			output = 1;
+		if (Input::was_key_pressed(Key::A_3))
+			output = 2;
+		if (Input::was_key_pressed(Key::A_4))
+			output = 3;
 
 		CompositeShader->set("u_Output", output);
 		CompositeShader->set("u_InverseView", glm::inverse(view));

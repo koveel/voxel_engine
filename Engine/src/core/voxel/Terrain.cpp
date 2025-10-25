@@ -55,8 +55,8 @@ namespace Engine {
 		chunk.mesh.m_MaterialIndex = 1;
 
 		// TODO: streaming (along w chunks)
-		chunk.bindless_image_handle = chunk.mesh.m_Texture;
-		chunk.bindless_image_handle.activate(TextureAccessMode::Read);
+		chunk.bindless_image = chunk.mesh.m_Texture;
+		chunk.bindless_image.activate(TextureAccessMode::Read);
 
 		return m_ChunkTable[chunk.index] = std::move(chunk);
 	}
@@ -82,7 +82,7 @@ namespace Engine {
 				continue;
 
 			TerrainChunk& chunk = m_ChunkTable[index];
-			uint64_t handle = chunk.bindless_image_handle.get_handle();
+			uint64_t handle = chunk.bindless_image.get_handle();
 			bindless_handles[i] = handle;
 			chunk_count++;
 		}
@@ -90,14 +90,15 @@ namespace Engine {
 		m_ShadowMap->bind_as_image(0, TextureAccessMode::Write);
 		m_ShadowMapGenerationShader->set("u_ChunkHandles", std::initializer_list<uint64_t>{
 			bindless_handles[0], bindless_handles[1], bindless_handles[2],
-			bindless_handles[3], bindless_handles[4], bindless_handles[5],
-			bindless_handles[6], bindless_handles[7], bindless_handles[8],
+				bindless_handles[3], bindless_handles[4], bindless_handles[5],
+				bindless_handles[6], bindless_handles[7], bindless_handles[8],
 		});
 		m_ShadowMapGenerationShader->set("u_ChunkCount", chunk_count);
 
 		constexpr size_t LocalSizeInShader = 4;
 		constexpr size_t Width = ShadowMapWidth / LocalSizeInShader;
 		constexpr size_t Height = ShadowMapHeight / LocalSizeInShader;
+
 		m_ShadowMapGenerationShader->dispatch(Width, Height, Width);
 
 		Graphics::memory_barrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
