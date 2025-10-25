@@ -25,6 +25,8 @@ uniform mat4 u_InverseView;
 uniform mat4 u_InverseProjection;
 uniform vec3 u_CameraPos;
 
+uniform int u_Output;
+
 vec3 ReconstructWorldSpaceFromDepth(vec2 uv)
 {
 	float depth = texture(u_Depth, uv).r;
@@ -72,5 +74,10 @@ void main()
 	float ao_dist_fade = GetAOFadeFromPixelPosition(worldSpaceFragment);
 
 	vec4 final = mix(albedo, albedo * vec4(vec3(ao * ao_dist_fade), 1.0f), ambient_contribution);
-	o_Color = final;
+
+	switch (u_Output)
+	{
+	case 0: o_Color = final; break;
+	case 1: o_Color = vec4(ao, 0.0f, 0.0f, 1.0f); break;
+	}
 }

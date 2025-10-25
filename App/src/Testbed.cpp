@@ -164,8 +164,8 @@ void testbed_start(App& app)
 	Window* window = app.get_window();
 
 	cameraController.m_Camera = &camera;
-	cameraController.m_TargetPosition = { -4.0f, 2.4f, -0.7f };
-	cameraController.m_TargetEuler = { -30.0f, -90.0f, 0.0f };
+	cameraController.m_TargetPosition = { 2.0f, 60.0f, 120.0f };
+	cameraController.m_TargetEuler = { -30.0f, 0.0f, 0.0f };
 
 	create_framebuffer(window->get_width(), window->get_height());
 	reload_all_shaders();
@@ -173,19 +173,28 @@ void testbed_start(App& app)
 
 	s_TerrainGen = make_owning<TerrainGenerator>();
 
-	Int2 chunks[] =
-	{
-		{-2, 2},  {-1, 2}, {0, 2}, {1, 2},  {2, 2},
+	bool one_chunk_mofo = false;
+	if (one_chunk_mofo)
+		s_TerrainGen->generate_chunk({});
+	else {
+		Int2 chunks[] =
+		{
+			{-1, 1}, {0, 1}, {1, 1},
+			{-1, 0}, {0, 0}, {1, 0},
+			{-1,-1}, {0,-1}, {1,-1},
 
-		{-2, 1},  {-1, 1}, {0, 1}, {1, 1},  {2, 1},
-		{-2, 0},  {-1, 0}, {0, 0}, {1, 0},  {2, 0},
-		{-2,-1},  {-1,-1}, {0,-1}, {1,-1},  {2,-1},
+			//{-2, 2},  {-1, 2}, {0, 2}, {1, 2},  {2, 2},
+			//
+			//{-2, 1},  {-1, 1}, {0, 1}, {1, 1},  {2, 1},
+			//{-2, 0},  {-1, 0}, {0, 0}, {1, 0},  {2, 0},
+			//{-2,-1},  {-1,-1}, {0,-1}, {1,-1},  {2,-1},
+			//
+			//{-2,-2},  {-1,-2}, {0,-2}, {1,-2},  {2,-2},
+		};
 
-		{-2,-2},  {-1,-2}, {0,-2}, {1,-2},  {2,-2},
-	};
-
-	for (Int2 i : chunks)
-		s_TerrainGen->generate_chunk(i);
+		for (Int2 i : chunks)
+			s_TerrainGen->generate_chunk(i);
+	}
 	s_TerrainGen->generate_shadowmap({});
 
 	blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
@@ -272,7 +281,10 @@ void testbed_update(App& app)
 	SceneRenderer::begin_frame(camera, cameraController.get_transform());
 
 	if (Input::was_key_pressed(Key::R) && Input::is_key_down(Key::Control))
+	{
 		reload_all_shaders();
+		s_TerrainGen->generate_shadowmap({});
+	}
 
 	handle_scene_view_ray_trace(cameraController.get_transform());
 
@@ -321,10 +333,10 @@ void testbed_update(App& app)
 		rp_Geometry.pShader->set("u_CameraPosition", cameraController.get_transform().Position);
 		rp_Geometry.pShader->set("u_TextureTileFactor", tile);
 
-		static bool draw_sm = false;
+		static bool draw_sm = 1;
 		if (Input::was_key_pressed(Key::M))
 			draw_sm = !draw_sm;
-		if (draw_sm)
+		if (draw_sm && VoxelMesh::s_MaterialPalette)
 		{
 			draw_shadow_map();
 		}
@@ -492,6 +504,13 @@ void testbed_update(App& app)
 		s_Framebuffer->m_DepthStencilAttachment->bind(4);
 		fresh_ao_texture->bind(2);
 
+		static int output = 0;
+		if (Input::was_key_pressed(Key::A_1))
+			output = 0;
+		if (Input::was_key_pressed(Key::A_2))
+			output = 1;
+
+		CompositeShader->set("u_Output", output);
 		CompositeShader->set("u_InverseView", glm::inverse(view));
 		CompositeShader->set("u_InverseProjection", glm::inverse(projection));
 		CompositeShader->set("u_CameraPos", cameraController.m_Transformation.Position);
@@ -510,7 +529,7 @@ void testbed_update(App& app)
 			render_outline = !render_outline;
 
 		Graphics::set_draw_mode(PrimitiveMode::LineStrip);
-		// Bounding boxes
+
 		if (render_outline)
 		{
 			for (auto& pair : s_TerrainGen->m_ChunkTable)

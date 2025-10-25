@@ -14,7 +14,7 @@ uniform int u_ChunkCount;
 
 void main()
 {
-	ivec3 global_voxel = ivec3(gl_GlobalInvocationID.xyz);
+	ivec3 block = ivec3(gl_GlobalInvocationID.xyz);
 
 	const int GridSize = 3;
 	ivec3 total_bounds = ivec3(
@@ -23,23 +23,34 @@ void main()
 		u_ChunkDimensions.z * GridSize
 	);
 	
-	if (any(greaterThanEqual(global_voxel, total_bounds)))
-		return;
-	
-	ivec2 chunk_index2D = ivec2(
-		global_voxel.x / u_ChunkDimensions.x,
-		global_voxel.z / u_ChunkDimensions.z
-	);
-	
-	int chunk_index = chunk_index2D.y * GridSize + chunk_index2D.x;
-	ivec3 local_voxel = ivec3(
-		global_voxel.x % u_ChunkDimensions.x,
-		global_voxel.y,
-		global_voxel.z % u_ChunkDimensions.z
-	);
-	
-	uint voxel = imageLoad(u_ChunkHandles[chunk_index], local_voxel).r;
-	uint v = uint(voxel != 0);
+	if (any(greaterThanEqual(block, total_bounds)))
+		return;	
 
-	imageStore(u_ShadowMap, global_voxel, uvec4(v));
+	uint packed_voxel = 0u;
+	for (int x = 0; x < 2; x++)
+	for (int y = 0; y < 2; y++)
+	for (int z = 0; z < 2; z++)
+	{
+		ivec3 voxel_pos = block * 2 + ivec3(x, y, z);
+	
+		ivec2 chunk_index2D = ivec2(
+			(block.x * 2) / u_ChunkDimensions.x,
+			(block.z * 2) / u_ChunkDimensions.z
+		);
+		int chunk_index = chunk_index2D.y * GridSize + chunk_index2D.x;
+
+		ivec3 local_voxel = ivec3(
+			voxel_pos.x % u_ChunkDimensions.x,
+			voxel_pos.y,
+			voxel_pos.z % u_ChunkDimensions.z
+		);
+	
+		uint voxel = imageLoad(u_ChunkHandles[chunk_index], local_voxel).r;
+		if (voxel != 0u) {
+			int	bit_index = x + y * 2 + z * 4;
+			packed_voxel |= (1u << bit_index);
+		}
+	}
+	
+	imageStore(u_ShadowMap, block, uvec4(packed_voxel));
 }

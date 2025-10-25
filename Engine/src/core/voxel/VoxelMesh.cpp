@@ -138,7 +138,19 @@ namespace Engine {
 			{
 				uint32_t default_palette[256]{};
 				default_palette[0] = encode_rgba(0, 0, 0, 0);
-				default_palette[1] = encode_rgba(125, 125, 125, 255);
+
+				default_palette[1] = encode_rgba(Color(1.0f, 0.0f, 1.0f, 1.0f) / 1.0f);
+				default_palette[2] = encode_rgba(Color(1.0f, 0.0f, 2.0f, 1.0f) / 2.0f);
+				default_palette[3] = encode_rgba(Color(1.0f, 0.0f, 3.0f, 1.0f) / 3.0f);
+
+				default_palette[4] = encode_rgba(Color(0.0f, 1.0f, 0.0f, 1.0f) / 1.0f);
+				default_palette[5] = encode_rgba(Color(0.0f, 1.0f, 0.0f, 2.0f) / 2.0f);
+				default_palette[6] = encode_rgba(Color(0.0f, 1.0f, 0.0f, 3.0f) / 3.0f);
+
+				default_palette[7] = encode_rgba(Color(1.0f, 1.0f, 1.0f, 1.0f) / 1.0f);
+				default_palette[8] = encode_rgba(Color(1.0f, 1.0f, 1.0f, 2.0f) / 2.0f);
+				default_palette[9] = encode_rgba(Color(1.0f, 1.0f, 1.0f, 3.0f) / 3.0f);
+
 				s_MaterialPalette->set_data(default_palette, 0, 0, 256, 1);
 			}
 

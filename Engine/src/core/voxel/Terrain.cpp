@@ -14,7 +14,9 @@
 namespace Engine {
 
 	static constexpr size_t ShadowMapNumChunks = 3;
-	static constexpr size_t ShadowMapWidth = TerrainChunk::Width * ShadowMapNumChunks;
+	static constexpr size_t ShadowMapPackFactor = 2;
+	static constexpr size_t ShadowMapWidth = (TerrainChunk::Width * ShadowMapNumChunks) / ShadowMapPackFactor;
+	static constexpr size_t ShadowMapHeight = TerrainChunk::Height / ShadowMapPackFactor;
 
 	TerrainGenerator::TerrainGenerator()
 	{
@@ -25,7 +27,7 @@ namespace Engine {
 		m_ChunkGenerationShader->set("u_ChunkDimensions", chunk_dimensions);
 		m_ShadowMapGenerationShader->set("u_ChunkDimensions", chunk_dimensions);
 
-		m_ShadowMap = Texture3D::create(ShadowMapWidth, TerrainChunk::Height, ShadowMapWidth, TextureFormat::R8UI, 3);
+		m_ShadowMap = Texture3D::create(ShadowMapWidth, ShadowMapHeight, ShadowMapWidth, TextureFormat::R8UI, 3);
 	}
 
 	TerrainChunk& TerrainGenerator::generate_chunk(Int2 planar_chunk_index)
@@ -61,10 +63,6 @@ namespace Engine {
 
 	void TerrainGenerator::generate_shadowmap(Int2 center_chunk)
 	{
-		constexpr size_t ShadowMapNumChunks = 3; // 3x3
-		constexpr size_t LocalSizeInShader = 4;
-		constexpr size_t Width = ShadowMapNumChunks * TerrainChunk::Width / LocalSizeInShader;
-
 		// bind them chunks boy (DEBUG DEBUG)
 		size_t binding = 0;
 		Int2 target_chunk_indices[ShadowMapNumChunks * ShadowMapNumChunks] =
@@ -96,9 +94,13 @@ namespace Engine {
 			bindless_handles[6], bindless_handles[7], bindless_handles[8],
 		});
 		m_ShadowMapGenerationShader->set("u_ChunkCount", chunk_count);
-		m_ShadowMapGenerationShader->dispatch(Width, TerrainChunk::Height / LocalSizeInShader, Width);
 
-		Graphics::memory_barrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		constexpr size_t LocalSizeInShader = 4;
+		constexpr size_t Width = ShadowMapWidth / LocalSizeInShader;
+		constexpr size_t Height = ShadowMapHeight / LocalSizeInShader;
+		m_ShadowMapGenerationShader->dispatch(Width, Height, Width);
+
+		Graphics::memory_barrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 	}
 
 }

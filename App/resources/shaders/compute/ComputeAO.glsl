@@ -39,7 +39,7 @@ vec2 GetBlueNoise2D(ivec2 pixel, int frame, int sampleIndex)
 	);
 	ivec2 noiseCoord = (pixel + offset) & 511;
 	vec4 noise = texelFetch(u_BlueNoiseTexture, noiseCoord, 0);
-	return noise.gb; // two channels for better decorrelation
+	return noise.gb;
 }
 
 vec3 RandomDirectionOnHemisphere(vec3 normal, ivec2 pixel, int frame, int sampleIndex)
@@ -47,9 +47,8 @@ vec3 RandomDirectionOnHemisphere(vec3 normal, ivec2 pixel, int frame, int sample
 	vec2 n = GetBlueNoise2D(pixel, frame, sampleIndex);
 	float r0 = n.x, r1 = n.y;
 
-	// Add both temporal and sample-based offsets
 	float temporalOffset = float(frame) * g_GoldenRatio;
-	float sampleOffset = float(sampleIndex) * 0.618034; // 1/phi for even distribution
+	float sampleOffset = float(sampleIndex) * 0.618034;
 	r0 = fract(r0 + temporalOffset + sampleOffset);
 
 	float cosTheta = sqrt(1.0 - r1);
@@ -67,16 +66,30 @@ vec3 RandomDirectionOnHemisphere(vec3 normal, ivec2 pixel, int frame, int sample
 	return normalize(x * tangent + y * bitangent + z * normal);
 }
 
+bool IsVoxelOccluded(ivec3 cell, int mip_level)
+{
+	ivec3 block_pos = cell * 2;
+	ivec3 local_pos = (cell) % 2;
+
+	int bit_index = local_pos.x + local_pos.y * 2 + local_pos.z * 4;
+	uint vpacked = texelFetch(u_ShadowMap, block_pos, mip_level).r;
+
+	return ((vpacked >> bit_index) & 1u) != 0u;
+}
+
 bool RaycastShadowMapVariableFidelity(vec3 origin, vec3 direction, out float t, const int maxDistanceMeters, const int mipLevel)
 {
+	const float PackFactor = 2.0f;
+
 	const float voxelScale = g_ShadowLODScales[mipLevel];
+	float packedVoxelScale = voxelScale * PackFactor;
+
 	ivec3 mapDimensions = textureSize(u_ShadowMap, mipLevel);
 
-	vec3 worldspaceExtents = (mapDimensions * voxelScale) / 2.0f;
+	vec3 worldspaceExtents = (mapDimensions * packedVoxelScale) / 2.0f;
 	vec3 boundsMin = -worldspaceExtents;
 
-	vec3 voxelsPerUnit = vec3(1.0f / voxelScale);
-
+	vec3 voxelsPerUnit = vec3(1.0f / packedVoxelScale);
 	vec3 entry = (origin - boundsMin) * voxelsPerUnit;
 
 	// early exit
@@ -90,14 +103,15 @@ bool RaycastShadowMapVariableFidelity(vec3 origin, vec3 direction, out float t, 
 	ivec3 pos = ivec3(clamp(floor(entry), vec3(0.0f), vec3(mapDimensions - 1)));
 	vec3 tMax = (vec3(pos) - entry + max(step, 0.0)) / direction;
 
-	int maxSteps = int(maxDistanceMeters / voxelScale);
+	int maxSteps = int(maxDistanceMeters / packedVoxelScale);
 	ivec3 iStep = ivec3(step);	
 
 	for (int i = 0; i < maxSteps; i++) {
-		if (texelFetch(u_ShadowMap, pos, mipLevel).r != 0) {
+		if (IsVoxelOccluded(pos, 0)) {
 			// Find which axis we just crossed
 			int axis = (tMax.x < tMax.y) ? ((tMax.x < tMax.z) ? 0 : 2) : ((tMax.y < tMax.z) ? 1 : 2);
-			t = (tMax[axis] - delta[axis]) * voxelScale;
+			//t = (tMax[axis] - delta[axis]) * voxelScale;
+			t = (tMax[axis] - delta[axis]) * packedVoxelScale;
 			return true;
 		}
 
@@ -125,7 +139,7 @@ float CastAmbientOcclusionRay(vec3 origin, vec3 direction)
 	float t;
 
 	for (int lod = 0; lod < 3; lod++) {
-		rayOrigin = origin + direction * ((totalTraveled + float(lod == 0)) * 1.01f * g_ShadowLODScales[lod]); // brless first mip offset
+		rayOrigin = origin + direction * ((totalTraveled + float(lod == 0)) * 1.01f * g_ShadowLODScales[lod] * 2.0f); // brless first mip offset
 
 		bool hit = RaycastShadowMapVariableFidelity(rayOrigin, direction, t, g_AORayDistances[lod], lod);
 		totalTraveled += t;
