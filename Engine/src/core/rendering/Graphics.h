@@ -40,8 +40,15 @@ namespace Engine {
 		Triangles = 0x0004,
 	};
 
+	// stupid
 #ifndef GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
 	#define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT 0x00000020
+#endif
+#ifndef GL_FRAMEBUFFER_BARRIER_BIT
+	#define GL_FRAMEBUFFER_BARRIER_BIT 0x00000400
+#endif
+#ifndef GL_TEXTURE_FETCH_BARRIER_BIT
+	#define GL_TEXTURE_FETCH_BARRIER_BIT 0x00000008
 #endif
 
 	class Graphics

@@ -31,7 +31,7 @@ namespace Engine {
 	}
 
 	Texture2D::Texture2D(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips)
-		: m_Width(width), m_Height(height), m_InternalFormat((GLenum)format)
+		: m_Width(width), m_Height(height), m_InternalFormat(format)
 	{	
 		m_DataFormat = gl_data_format_from_internal_format(format);
 
@@ -51,7 +51,7 @@ namespace Engine {
 
 	void Texture2D::bind_as_image(uint32_t slot, TextureAccessMode mode) const
 	{
-		glBindImageTexture(slot, m_ID, 0, GL_FALSE, 0, (GLenum)mode, m_InternalFormat);
+		glBindImageTexture(slot, m_ID, 0, GL_FALSE, 0, (GLenum)mode, (uint32_t)m_InternalFormat);
 	}	
 
 	void Texture2D::set_filter_mode(TextureFilterMode mode)
@@ -119,6 +119,35 @@ namespace Engine {
 	owning_ptr<Texture2D> Texture2D::create(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips)
 	{
 		return owning_ptr<Texture2D>(new Texture2D(width, height, format, mips));
+	}
+
+	TextureView::TextureView(const owning_ptr<Texture2D>& texture, TextureFormat format)
+		: m_InternalFormat(format)
+	{
+		glGenTextures(1, &m_ID);
+		glTextureView(m_ID, GL_TEXTURE_2D, texture->get_handle(), (uint32_t)m_InternalFormat, 0, 1, 0, 1);
+	}
+
+	void TextureView::bind(uint32_t slot) const
+	{
+		glBindTextureUnit(slot, m_ID);
+	}
+
+	// very useful -_-
+	static GLenum image_format_from_potential_depth_format(TextureFormat format)
+	{
+		switch (format)
+		{
+		case TextureFormat::Depth16: return (GLenum)TextureFormat::R16;
+		case TextureFormat::Depth32F: return (GLenum)TextureFormat::R32F;
+		default:
+			return (GLenum)format;
+		}
+	}
+
+	void TextureView::bind_as_image(uint32_t slot, TextureAccessMode mode) const
+	{
+		glBindImageTexture(slot, m_ID, 0, GL_FALSE, 0, (GLenum)mode, image_format_from_potential_depth_format(m_InternalFormat));
 	}
 
 	Texture3D::Texture3D(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
@@ -208,5 +237,5 @@ namespace Engine {
 	{
 		glMakeImageHandleNonResidentARB(m_Handle);
 	}
-
+	
 }

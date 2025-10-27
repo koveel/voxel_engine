@@ -32,13 +32,13 @@ static RenderPass rp_ScreenspaceUI;
 static owning_ptr<Shader> LightShader;
 static owning_ptr<Shader> DefaultMeshShader;
 static owning_ptr<Shader> CompositeShader;
-static owning_ptr<Shader> BlitShader;
+static owning_ptr<Shader> DepthAndNormal_BlitShader;
 static owning_ptr<Shader> Shader_NoFragment;
 static owning_ptr<Shader> SpriteShader;
 static owning_ptr<Shader> TextShader;
 
 static owning_ptr<ComputeShader> ComputeAOShader;
-static owning_ptr<ComputeShader> ComputeSSAOShader;
+static owning_ptr<ComputeShader> Compute_BlitShader;
 
 static owning_ptr<Font> s_Font;
 
@@ -60,6 +60,7 @@ static Matrix4 s_PreviousViewProjection = Matrix4(1.0f);
 static void create_framebuffer(uint32_t screen_width, uint32_t screen_height)
 {
 	// Create framebuffer
+	// TODO: revisit - some of these may be unneccessary??
 	FramebufferDescriptor descriptor;
 	descriptor.ColorAttachments = {
 		{ screen_width, screen_height, TextureFormat::RGBA8 }, // albedo
@@ -68,9 +69,10 @@ static void create_framebuffer(uint32_t screen_width, uint32_t screen_height)
 		{ screen_width, screen_height, TextureFormat::RGB8S, false }, // normal last frame
 		{ screen_width, screen_height, TextureFormat::R8, false }, // AO accumulation tex 1
 		{ screen_width, screen_height, TextureFormat::R8, false }, // AO accumulation tex 2
-		{ screen_width, screen_height, TextureFormat::R16, false }, // depth last frame
+		{ screen_width, screen_height, TextureFormat::R32F, false }, // depth last frame
 
 		{ screen_width, screen_height, TextureFormat::RGBA8 }, // lighting
+		{ screen_width, screen_height, TextureFormat::R32F }, // depth occlusion
 	};
 	FramebufferDescriptor::DepthStencilAttachment depthStencilAttachment = {
 		screen_width, screen_height, TextureFormat::Depth32FStencil8
@@ -97,13 +99,13 @@ static void reload_all_shaders()
 	rp_Stencil.pShader = Shader_NoFragment.get();
 	CompositeShader = Shader::create("resources/shaders/CompositeShader.glsl");
 	rp_Composite.pShader = CompositeShader.get();
-	BlitShader = Shader::create("resources/shaders/BlitShader.glsl");
-	rp_Blit.pShader = BlitShader.get();
+	DepthAndNormal_BlitShader = Shader::create("resources/shaders/BlitShader.glsl");
+	rp_Blit.pShader = DepthAndNormal_BlitShader.get();
 	SpriteShader = Shader::create("resources/shaders/SpriteShader.glsl");
 	TextShader = Shader::create("resources/shaders/TextShader.glsl");
 
 	ComputeAOShader = ComputeShader::create("resources/shaders/compute/ComputeAO.glsl");
-	ComputeSSAOShader = ComputeShader::create("resources/shaders/compute/ComputeSSAO.glsl");
+	Compute_BlitShader = ComputeShader::create("resources/shaders/compute/Compute_Blit.glsl");
 }
 
 static void init_renderpass()
@@ -129,7 +131,7 @@ static void init_renderpass()
 	rp_Composite.pShader = CompositeShader.get();
 	rp_Composite.Depth.Test = DepthTest::Off;
 
-	rp_Blit.pShader = BlitShader.get();
+	rp_Blit.pShader = DepthAndNormal_BlitShader.get();
 	rp_Blit.Depth.Test = DepthTest::Off;
 
 	rp_DebugGeometry.Depth.Test = DepthTest::Off;
@@ -179,17 +181,22 @@ void testbed_start(App& app)
 	else {
 		Int2 chunks[] =
 		{
-			{-1, 1}, {0, 1}, {1, 1},
-			{-1, 0}, {0, 0}, {1, 0},
-			{-1,-1}, {0,-1}, {1,-1},
+			//{0, 2},
+			//{0, 1},
+			//{0, 0},
+			//{0,-1},
+					 
+			//{-1, 1}, {0, 1}, {1, 1},
+			//{-1, 0}, {0, 0}, {1, 0},
+			//{-1,-1}, {0,-1}, {1,-1},
 
-			//{-2, 2},  {-1, 2}, {0, 2}, {1, 2},  {2, 2},
-			//
-			//{-2, 1},  {-1, 1}, {0, 1}, {1, 1},  {2, 1},
-			//{-2, 0},  {-1, 0}, {0, 0}, {1, 0},  {2, 0},
-			//{-2,-1},  {-1,-1}, {0,-1}, {1,-1},  {2,-1},
-			//
-			//{-2,-2},  {-1,-2}, {0,-2}, {1,-2},  {2,-2},
+			{-2, 2},  {-1, 2}, {0, 2}, {1, 2},  {2, 2},
+			
+			{-2, 1},  {-1, 1}, {0, 1}, {1, 1},  {2, 1},
+			{-2, 0},  {-1, 0}, {0, 0}, {1, 0},  {2, 0},
+			{-2,-1},  {-1,-1}, {0,-1}, {1,-1},  {2,-1},
+			
+			{-2,-2},  {-1,-2}, {0,-2}, {1,-2},  {2,-2},
 		};
 
 		for (Int2 i : chunks)
@@ -238,7 +245,7 @@ static Float3 get_highlighted_voxel_center()
 	return center;
 }
 
-static void draw_shadow_map()
+static void draw_shadow_map(uint32_t level)
 {
 	auto& texture = s_TerrainGen->m_ShadowMap;
 	Int3 voxelDimensions = texture->get_dimensions();
@@ -251,13 +258,15 @@ static void draw_shadow_map()
 	shader->set("u_OBBCenter", Float3(0.0f, 0.0f, 0.0f));
 	shader->set("u_OBBOrientation", glm::inverse(rotation));
 	shader->set("u_VoxelDimensions", voxelDimensions);
-	shader->set("u_MaterialIndex", 0);
+	shader->set("u_MaterialIndex", 1);
+	shader->set("u_MipLevel", level);
 
 	shader->set("u_Transformation", transformation);
 
 	texture->bind();
-	VoxelMesh::s_MaterialPalette->bind(1);
+	VoxelMesh::s_MaterialPalette->bind(3);
 	Graphics::draw_cube();
+	shader->set("u_MipLevel", 0);
 }
 
 void testbed_update(App& app)
@@ -273,64 +282,28 @@ void testbed_update(App& app)
 
 	Matrix4 view = cameraController.get_view();
 	Matrix4 projection = camera.get_projection();
-	renderPipeline.begin(view, projection);
 
+	renderPipeline.begin(view, projection);
 	s_Framebuffer->bind();
 	s_Framebuffer->clear({ 0.0f });
-
 	SceneRenderer::begin_frame(camera, cameraController.get_transform());
 
+	// hot reload
 	if (Input::was_key_pressed(Key::R) && Input::is_key_down(Key::Control))
 	{
 		reload_all_shaders();
 		s_TerrainGen->generate_shadowmap({});
 	}
-
 	handle_scene_view_ray_trace(cameraController.get_transform());
-
-	//static Float3 noiseOffset = {};
-	//Float3 lastNoiseOffset = noiseOffset;
-	//if (Input::is_key_down(Key::UpArrow))
-	//	noiseOffset.z += 3.0f * deltaTime;
-	//if (Input::is_key_down(Key::DownArrow))
-	//	noiseOffset.z -= 3.0f * deltaTime;
-	//if (Input::is_key_down(Key::LeftArrow))
-	//	noiseOffset.x -= 3.0f * deltaTime;
-	//if (Input::is_key_down(Key::RightArrow))
-	//	noiseOffset.x += 3.0f * deltaTime;
-	//if (lastNoiseOffset != noiseOffset)
-	//{
-	//	//s_TerrainGen->regenerate_chunk(simplex_chunk, noiseOffset);
-	//}
-
-	static Int2 chunk_offset_to_gen = {};
-	Int2 last = chunk_offset_to_gen;
-	if (Input::was_key_pressed(Key::UpArrow))
-		chunk_offset_to_gen.y++;
-	if (Input::was_key_pressed(Key::DownArrow))
-		chunk_offset_to_gen.y--;
-	if (Input::was_key_pressed(Key::LeftArrow))
-		chunk_offset_to_gen.x--;
-	if (Input::was_key_pressed(Key::RightArrow))
-		chunk_offset_to_gen.x++;
-
-	if (chunk_offset_to_gen != last)
-	{
-		s_TerrainGen->generate_chunk(chunk_offset_to_gen);
-	}
 
 	// GEOMETRY PASS
 	renderPipeline.submit_pass(rp_Geometry, [&]()
 	{
-		testTexture->bind(2);
-
-		static uint32_t tile = 4;
-		if (Input::was_key_pressed(Key::UpArrow))
-			tile++;
-		if (Input::was_key_pressed(Key::DownArrow))
-			tile--;
+		s_TerrainGen->m_ShadowMap->bind(1);
 
 		rp_Geometry.pShader->set("u_CameraPosition", cameraController.get_transform().Position);
+
+		static uint32_t tile = 4;
 		rp_Geometry.pShader->set("u_TextureTileFactor", tile);
 
 		static bool draw_sm = false;
@@ -338,12 +311,67 @@ void testbed_update(App& app)
 			draw_sm = !draw_sm;
 		if (draw_sm && VoxelMesh::s_MaterialPalette)
 		{
-			draw_shadow_map();
+			static int32_t level = 0;
+			if (Input::was_key_pressed(Key::UpArrow))
+				level++;
+			if (Input::was_key_pressed(Key::DownArrow))
+				level--;
+
+			level = glm::clamp(level, 0, 2);
+			draw_shadow_map(level);
 		}
 		else
 		{
-			for (auto& pair : s_TerrainGen->m_ChunkTable)
-				SceneRenderer::draw_mesh(pair.second.mesh, pair.second.position, {});
+			/*
+			{-2, 2},  {-1, 2}, {0, 2}, {1, 2},  {2, 2},
+
+			{-2, 1},  {-1, 1}, {0, 1}, {1, 1},  {2, 1},
+			{-2, 0},  {-1, 0}, {0, 0}, {1, 0},  {2, 0},
+			{-2,-1},  {-1,-1}, {0,-1}, {1,-1},  {2,-1},
+
+			{-2,-2},  {-1,-2}, {0,-2}, {1,-2},  {2,-2},
+			*/
+
+			//for (auto& chunk : s_TerrainGen->m_ChunkTable)
+			//{
+			//	SceneRenderer::draw_mesh(chunk.second.mesh, chunk.second.position, {});
+			//}
+
+			//TerrainChunk* sorted_chunks[] =
+			//{
+			//	&s_TerrainGen->m_ChunkTable[{0, 0}],
+			//	&s_TerrainGen->m_ChunkTable[{0, 1}],
+			//	&s_TerrainGen->m_ChunkTable[{1, 1}],
+			//	&s_TerrainGen->m_ChunkTable[{1, 0}],
+			//	&s_TerrainGen->m_ChunkTable[{1,-1}],
+			//	&s_TerrainGen->m_ChunkTable[{0,-1}],
+			//	&s_TerrainGen->m_ChunkTable[{-1,-1}],
+			//	&s_TerrainGen->m_ChunkTable[{-1,0}],
+			//	&s_TerrainGen->m_ChunkTable[{-1,1}],
+			//};
+			//
+			//float d = 0.0f;
+			//auto& occlusion = s_Framebuffer->m_ColorAttachments[7];
+			//
+			//for (TerrainChunk* pchunk : sorted_chunks)
+			//{
+			//	occlusion->bind(2);
+			//	
+			//	Graphics::memory_barrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
+			//
+			//	Compute_BlitShader->bind();
+			//	//s_Framebuffer->m_ColorAttachments[5]->bind_as_image(0, TextureAccessMode::Read);
+			//	s_Framebuffer->m_DepthStencilAttachment->bind(0);
+			//	//s_Framebuffer->m_DepthStencilAttachment->bind_as_image(0, TextureAccessMode::Read);
+			//	occlusion->bind_as_image(1, TextureAccessMode::Write);
+			//	
+			//	uint32_t localSizeX = 16, localSizeY = 16;
+			//	Compute_BlitShader->dispatch(
+			//		(viewport.x + localSizeX - 1) / localSizeX,
+			//		(viewport.y + localSizeY - 1) / localSizeY
+			//	);
+			//	Graphics::memory_barrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+			//}
 		}
 	});
 
@@ -450,47 +478,13 @@ void testbed_update(App& app)
 		Graphics::memory_barrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	}
 	
-	if (ssao)
-	// COMPUTE SSAO
-	{
-		ComputeSSAOShader->bind();
-
-		s_Framebuffer->m_DepthStencilAttachment->bind(0);
-		s_Framebuffer->m_ColorAttachments[1]->bind(1);
-
-		// ao accum tex ping pong
-		{
-			uint32_t readIndex = frameNumber % 2;
-			uint32_t writeIndex = 1 - readIndex;
-
-			const uint32_t aoIndex = 3;
-			uint32_t fbo = s_Framebuffer->get_handle();
-			const auto& read = s_Framebuffer->m_ColorAttachments[aoIndex + readIndex];
-			const auto& write = s_Framebuffer->m_ColorAttachments[aoIndex + writeIndex];
-
-			read->bind(2);
-			write->bind_as_image(0, TextureAccessMode::Write);
-
-			fresh_ao_texture = write.get();
-		}
-
-		ComputeSSAOShader->set("u_InverseView", glm::inverse(view));
-		ComputeSSAOShader->set("u_InverseProjection", glm::inverse(projection));
-		ComputeSSAOShader->set("u_ViewProjection", projection * view);
-
-		uint32_t localSizeX = 16, localSizeY = 16;
-		ComputeSSAOShader->dispatch(
-			(viewport.x + localSizeX - 1) / localSizeX,
-			(viewport.y + localSizeY - 1) / localSizeY
-		);
-	}
-
+	// TODO: computize ?
 	// Blit depth and normals into old depth / old normal
 	renderPipeline.submit_pass(rp_Blit, [&]()
 	{
 		s_Framebuffer->m_DepthStencilAttachment->bind(0);
 		s_Framebuffer->m_ColorAttachments[1]->bind(1);
-		Graphics::draw_fullscreen_triangle(BlitShader);
+		Graphics::draw_fullscreen_triangle(DepthAndNormal_BlitShader);
 	});
 
 	Framebuffer::unbind();
@@ -504,6 +498,8 @@ void testbed_update(App& app)
 		s_Framebuffer->m_DepthStencilAttachment->bind(4);
 		fresh_ao_texture->bind(2);
 
+		s_Framebuffer->m_ColorAttachments[7]->bind(5);
+
 		static int output = 0;
 		if (Input::was_key_pressed(Key::A_1))
 			output = 0;
@@ -513,6 +509,8 @@ void testbed_update(App& app)
 			output = 2;
 		if (Input::was_key_pressed(Key::A_4))
 			output = 3;
+		if (Input::was_key_pressed(Key::A_5))
+			output = 4;
 
 		CompositeShader->set("u_Output", output);
 		CompositeShader->set("u_InverseView", glm::inverse(view));
@@ -552,6 +550,8 @@ void testbed_update(App& app)
 					{ 0.9f, 0.9f, 0.9f },
 				};
 				Float3 col = colors[(chunk.index.x + chunk.index.y) % std::size(colors)];
+				if (glm::abs(pair.first.x) >= 2 || glm::abs(pair.first.y) >= 2)
+					col = { 0.8f, 0.8f, 0.8f };
 
 				DefaultMeshShader->set("u_Color", Float4(col, 1.0f));
 				DefaultMeshShader->set("u_Transformation", transformation);

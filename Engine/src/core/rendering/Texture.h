@@ -8,6 +8,7 @@ namespace Engine {
 
 		R8     = 0x8229,
 		R16    = 0x822A,
+		R16F   = 0x822D,
 		R32F   = 0x822E,
 		RG8    = 0X822B,
 		RGB8   = 0x8051,
@@ -16,9 +17,10 @@ namespace Engine {
 		RGBA8S = 0x8F97,
 		A8     = 0x803C,
 
-		Depth16 = 0x81A5,
-		Depth24 = 0x81A6,
-		Depth32 = 0x81A7,
+		Depth16  = 0x81A5,
+		Depth24  = 0x81A6,
+		Depth32  = 0x81A7,
+		Depth32F = 0x8CAC,
 
 		Depth24Stencil8 = 0x88F0,
 		Depth32FStencil8 = 0x8CAD,
@@ -64,7 +66,7 @@ namespace Engine {
 		void bind_as_image(uint32_t slot, TextureAccessMode mode) const;
 		uint32_t get_handle() const { return m_ID; }
 				
-		TextureFormat get_format() const { return (TextureFormat)m_InternalFormat; }
+		TextureFormat get_format() const { return m_InternalFormat; }
 
 		static owning_ptr<Texture2D> load(const std::filesystem::path& filepath);
 		static owning_ptr<Texture2D> create(uint32_t width, uint32_t height, TextureFormat format, uint32_t mips = 1);
@@ -72,7 +74,22 @@ namespace Engine {
 		uint32_t m_ID = 0;
 		uint32_t m_Width = 0, m_Height = 0;
 
-		uint32_t m_InternalFormat, m_DataFormat;
+		TextureFormat m_InternalFormat;
+		uint32_t m_DataFormat;
+	};
+
+	class TextureView
+	{
+	public:
+		TextureView() = default;
+		TextureView(const owning_ptr<Texture2D>& texture, TextureFormat format);
+
+		void bind(uint32_t slot = 0) const;
+		void bind_as_image(uint32_t slot, TextureAccessMode mode) const;
+		uint32_t get_handle() const { return m_ID; }
+	private:
+		uint32_t m_ID = 0;
+		TextureFormat m_InternalFormat;
 	};
 
 	class Texture3D

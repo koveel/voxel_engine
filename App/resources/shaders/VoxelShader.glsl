@@ -24,18 +24,24 @@ layout(location = 1) out vec3 o_Normal;
 in vec3 o_VertexWorldSpace;
 
 layout(binding = 0) uniform usampler3D u_VoxelTexture;
-layout(binding = 1) uniform sampler2D u_MaterialPalette;
-layout(binding = 2) uniform sampler2D u_Texture;
+layout(binding = 1) uniform usampler3D u_ShadowMap;
+layout(binding = 2) uniform sampler2D u_DepthOcclusion;
 
-uniform int u_TextureTileFactor = 1;
+layout(binding = 3) uniform sampler2D u_MaterialPalette;
+layout(binding = 4) uniform sampler2D u_Texture;
 
 uniform vec3 u_CameraPosition;
+uniform vec2 u_ViewportDims;
 
 uniform int u_MaterialIndex;
 uniform int u_MipLevel = 0;
 
 uniform vec3 u_OBBCenter;
 uniform mat4 u_OBBOrientation;
+
+uniform mat4 u_ViewProjection;
+
+uniform int u_TextureTileFactor = 1;
 
 float RayAABB(vec3 ro, vec3 rd, vec3 p0, vec3 p1)
 {
@@ -83,7 +89,7 @@ void RaymarchVoxelMesh(
 )
 {
 	const float BaseVoxelScale = 0.1f;
-	float voxelScale = BaseVoxelScale * exp2(u_MipLevel);
+	float voxelScale = BaseVoxelScale * exp2(u_MipLevel);	
 
 	// Bounding box
 	ivec3 mipDimensions = textureSize(u_VoxelTexture, u_MipLevel);
@@ -96,21 +102,40 @@ void RaymarchVoxelMesh(
 	vec3 entry = ((rayOrigin + rayDirection * (hit + 0.0001f)) - p0) * voxelsPerUnit;
 	vec3 entryWorldspace = rayOrigin + rayDirection * hit;
 
+	// DEPTH EARLY EXIT
+	vec4 entryClip = u_ViewProjection * vec4(entryWorldspace, 1.0);
+	
+	float ndcZ = entryClip.z / entryClip.w;  // -1..1
+	float windowDepth = ndcZ * 0.5 + 0.5;
+	
+	ivec2 texel = ivec2(gl_FragCoord.xy);
+	// 1 = near, 0 = far
+	float cur_depth = texelFetch(u_DepthOcclusion, texel, 0).r;
+	
+	// if ray starts further away, occluded and can skip
+	if (windowDepth < cur_depth) {
+		discard;
+		o_Albedo = vec4(1.0f, 0.0f, 0.0f, 1.0f);
+		return false;
+	}
+
 	ivec3 step = ivec3(sign(rayDirection));
-	vec3 delta = abs(1.0f / rayDirection);
+	vec3 invDirection = 1.0f / rayDirection;
+
+	vec3 delta = abs(invDirection);
 	ivec3 pos = ivec3(clamp(floor(entry), vec3(0.0f), vec3(mipDimensions - 1)));
 	vec3 tMax = (vec3(pos) - entry + max(vec3(step), 0.0)) / rayDirection;
 
 	int axis = 0;
-	int maxSteps = mipDimensions.x + mipDimensions.y + mipDimensions.z;
+	int maxSteps = mipDimensions.x + mipDimensions.y + mipDimensions.z;	
 
 	for (int i = 0; i < maxSteps; i++)
-	{
+	{		
 		uint col = texelFetch(u_VoxelTexture, pos, u_MipLevel).r;
 		if (col != 0)
 		{
 			color = int(col);
-			voxel = pos;			
+			voxel = pos;	
 
 			// edge voxel
 			if (i == 0)
@@ -149,6 +174,14 @@ void RaymarchVoxelMesh(
 			return;
 		}
 
+		// DDA step - branchless axis selection
+		//bvec3 isMin = lessThan(tMax.xyz, tMax.yzx);
+		//isMin = isMin && lessThanEqual(tMax.xyz, tMax.zxy);
+		//
+		//pos += ivec3(isMin) * ivec3(step);
+		//tMax += vec3(isMin) * delta;
+		//axis = int(dot(vec3(isMin), vec3(0.0, 1.0, 2.0)));
+
 		if (tMax.x < tMax.y) {
 			if (tMax.x < tMax.z) {
 				pos.x += step.x;
@@ -180,8 +213,6 @@ void RaymarchVoxelMesh(
 
 	discard;
 }
-
-uniform mat4 u_ViewProjection;
 
 float LinearizeDepth(vec3 p)
 {
@@ -241,7 +272,7 @@ void main()
 	// hitpoint / depth
 	vec3 hitpoint = u_CameraPosition - cameraToPixel * t;
 	float depth = LinearizeDepth(hitpoint);
-	gl_FragDepth = depth;
+	gl_FragDepth = depth;	
 
 	// normals
 	const float NormalMapStrength = 0.5f;
@@ -249,15 +280,15 @@ void main()
 	vec3 normal_map = (u_OBBOrientation * vec4(texture(u_Texture, uv).rgb, 1.0f)).xyz;
 	o_Normal = mix(normal, normal_map, NormalMapStrength);
 
-	vec3 T, B;
-	GetVoxelTangentBasis(normal, T, B);
+	//vec3 T, B;
+	//GetVoxelTangentBasis(normal, T, B);
 
-	vec3 tangentNormal = texture(u_Texture, uv).xyz * 2.0 - 1.0;
-	vec3 worldNormal = normalize(
-		tangentNormal.x * T +
-		tangentNormal.y * B +
-		tangentNormal.z * normal
-	);
+	//vec3 tangentNormal = texture(u_Texture, uv).xyz * 2.0 - 1.0;
+	//vec3 worldNormal = normalize(
+	//	tangentNormal.x * T +
+	//	tangentNormal.y * B +
+	//	tangentNormal.z * normal
+	//);
 
 	o_Normal = normal;
 

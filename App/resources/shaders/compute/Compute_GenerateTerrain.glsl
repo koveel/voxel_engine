@@ -109,7 +109,7 @@ float snoise(vec3 v)
 
 float GetSimplexHeightMapValue(vec3 p)
 {
-	float amplitude = 1.0f;
+	float amplitude = 0.5f;
 	float frequency = 0.1f;
 	float lacunarity = 1.8f;
 	float persistence = 0.6f;
@@ -143,6 +143,5 @@ void main()
 
 	if (voxel.y < voxel_height) {
 		imageStore(u_ChunkTexture, voxel, uvec4(voxel_height));
-		//imageStore(u_ShadowMap, voxel, uvec4(1));
 	}
 }

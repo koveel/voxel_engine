@@ -45,7 +45,7 @@ namespace Engine {
 		s_VoxelMeshShader->set("u_Transformation", transformation);
 
 		texture->bind();
-		VoxelMesh::bind_palette(1);
+		VoxelMesh::bind_palette(3);
 		Graphics::draw_cube();
 	}
 
