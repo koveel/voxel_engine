@@ -14,6 +14,7 @@ struct ChunkInstance
 {
 	mat4 transformation;
 	uint64_t voxel_texture_handle;
+	int lod;
 };
 
 layout(std430, binding = 0) readonly buffer InstanceData
@@ -53,6 +54,7 @@ struct ChunkInstance
 {
 	mat4 transformation;
 	uint64_t voxel_texture_handle;
+	int lod;
 };
 
 layout(std430, binding = 0) readonly buffer InstanceData
@@ -65,7 +67,6 @@ uniform vec3 u_CameraPosition;
 uniform vec2 u_ViewportDims;
 
 uniform int u_MaterialIndex;
-uniform int u_MipLevel = 0;
 
 float RayAABB_fast(vec3 origin, vec3 invDir, vec3 p0, vec3 p1, ivec3 sign)
 {
@@ -106,15 +107,15 @@ bool Approx(float a, float b)
 
 void RaymarchVoxelMesh(
 	vec3 rayOrigin, vec3 rayDirection, vec3 obbCenter,
-	out int color, out vec3 normal, out float t, out ivec3 voxel,
-	usampler3D voxel_texture
+	usampler3D voxel_texture, int mip,
+	out int color, out vec3 normal, out float t, out ivec3 voxel
 )
 {
 	const float BaseVoxelScale = 0.1f;
-	float voxelScale = BaseVoxelScale * exp2(u_MipLevel);
+	float voxelScale = BaseVoxelScale * exp2(mip);
 
 	// Bounding box
-	ivec3 mipDimensions = textureSize(voxel_texture, u_MipLevel);
+	ivec3 mipDimensions = textureSize(voxel_texture, mip);
 	vec3 worldspaceExtents = (vec3(mipDimensions) * voxelScale) * 0.5f;
 	vec3 p0 = obbCenter - worldspaceExtents;
 	vec3 p1 = obbCenter + worldspaceExtents;
@@ -155,7 +156,7 @@ void RaymarchVoxelMesh(
 
 	for (int i = 0; i < maxSteps; i++)
 	{
-		uint col = texelFetch(voxel_texture, pos, u_MipLevel).r;
+		uint col = texelFetch(voxel_texture, pos, mip).r;
 		if (col != 0)
 		{
 			color = int(col);
@@ -221,9 +222,11 @@ void main()
 	// march
 	ChunkInstance chunk_instance = chunks[v_Instance];
 
-	vec3 obb_center = vec3(chunk_instance.transformation[3]);
 	usampler3D voxel_texture = usampler3D(chunk_instance.voxel_texture_handle);
-	RaymarchVoxelMesh(u_CameraPosition, cameraToPixel, obb_center, colorIndex, normal, t, voxel, voxel_texture);
+	vec3 chunk_center = vec3(chunk_instance.transformation[3]);
+	int mip = chunk_instance.lod;
+
+	RaymarchVoxelMesh(u_CameraPosition, cameraToPixel, chunk_center, voxel_texture, mip, colorIndex, normal, t, voxel);
 
 	// hitpoint / depth
 	vec3 hitpoint = u_CameraPosition + cameraToPixel * t;

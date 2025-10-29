@@ -55,18 +55,13 @@ namespace Engine {
 
 	void ShaderStorageBuffer::bind(uint32_t slot)
 	{
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_ID);
+		//glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_ID);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, slot, m_ID);
 	}
 
-	void ShaderStorageBuffer::set_data(const void* data, size_t size)
+	void ShaderStorageBuffer::set_data(const void* data, size_t offset, size_t size)
 	{
-		glNamedBufferSubData(m_ID, 0, size, data);
-	}
-
-	owning_ptr<ShaderStorageBuffer> ShaderStorageBuffer::create(const void* data, size_t size)
-	{
-		return owning_ptr<ShaderStorageBuffer>(new ShaderStorageBuffer(data, size));
+		glNamedBufferSubData(m_ID, offset, size, data);
 	}
 
 }

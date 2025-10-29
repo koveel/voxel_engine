@@ -3,10 +3,11 @@
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 layout(binding = 0, r8ui) uniform writeonly uimage3D u_ChunkTexture;
-//layout(binding = 1, r8ui) uniform writeonly uimage3D u_ShadowMap;
  
 uniform ivec3 u_ChunkDimensions;
 uniform vec3 u_ChunkPositionWorld;
+
+uniform int u_MipLevel;
 
 //
 // Description : Array and textureless GLSL 2D/3D/4D simplex 
@@ -131,17 +132,17 @@ float GetSimplexHeightMapValue(vec3 p)
 void main()
 {
 	ivec3 voxel = ivec3(gl_GlobalInvocationID.xyz);
-	if (any(greaterThanEqual(voxel, u_ChunkDimensions)))
-		return;
+	float voxelScale = 0.1f * exp2(u_MipLevel);
 
 	int index = voxel.z * u_ChunkDimensions.x + voxel.x;
 
-	vec3 p = vec3(voxel) * 0.1f + u_ChunkPositionWorld;
+	vec3 p = vec3(voxel) * voxelScale + u_ChunkPositionWorld;
 	float height_sample = clamp(GetSimplexHeightMapValue(p) * 0.5f + 0.5f, 0.0f, 1.0f);
 
 	int voxel_height = int(height_sample * u_ChunkDimensions.y - 1);
 
 	if (voxel.y < voxel_height) {
-		imageStore(u_ChunkTexture, voxel, uvec4(voxel_height));
+		uint c = u_MipLevel == 0 ? 127 : (u_MipLevel == 1 ? 100 : 40);
+		imageStore(u_ChunkTexture, voxel, uvec4(c));
 	}
 }

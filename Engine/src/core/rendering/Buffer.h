@@ -107,13 +107,29 @@ namespace Engine {
 		~ShaderStorageBuffer();
 
 		void bind(uint32_t slot = 0);
-		void set_data(const void* data, size_t size);
+
+		// leave offset and count 0 if setting whole buffer
+		template<typename T>
+		void update(const T* data, size_t offset = 0, size_t count = 0)
+		{
+			size_t size = (count ? count : m_Capacity) * sizeof(T);
+			set_data(data, offset * sizeof(T), size);
+		}
 
 		uint32_t get_handle() const { return m_ID; }
 
-		static owning_ptr<ShaderStorageBuffer> create(const void* data, size_t size);
+		template<typename T>
+		static owning_ptr<ShaderStorageBuffer> create(const T* data, size_t count)
+		{
+			auto ssbo = new ShaderStorageBuffer(data, count * sizeof(T));
+			ssbo->m_Capacity = count;
+			return owning_ptr<ShaderStorageBuffer>(ssbo);
+		}
+	private:
+		void set_data(const void* data, size_t offset_bytes, size_t size_bytes);
 	private:
 		uint32_t m_ID = 0;
+		size_t m_Capacity = 0; // max 'elements'
 	};
 
 }

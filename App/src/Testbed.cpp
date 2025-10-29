@@ -174,8 +174,8 @@ void testbed_start(App& app)
 	init_renderpass();
 
 	s_TerrainGen = make_owning<TerrainGenerator>();
-
-#define NUM_CHUNKS 128
+	 
+#define NUM_CHUNKS 25
 
 #if NUM_CHUNKS == 1
 	s_TerrainGen->generate_chunk({});
@@ -188,6 +188,7 @@ void testbed_start(App& app)
 		s_TerrainGen->generate_chunk(idx);
 	}
 #endif
+	s_TerrainGen->resort_chunks({});
 	s_TerrainGen->generate_shadowmap({});
 
 	blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
@@ -292,11 +293,16 @@ void testbed_update(App& app)
 		static uint32_t tile = 4;
 		rp_Geometry.pShader->set("u_TextureTileFactor", tile);
 
-		static int32_t level = 0;
+		static int32_t level = 2;
 		if (Input::was_key_pressed(Key::UpArrow))
-			level++;
+		{
+			level = glm::max(--level, 0);
+			s_TerrainGen->generate_chunk_lod({}, level);
+		}
 		if (Input::was_key_pressed(Key::DownArrow))
-			level--;
+		{
+			level++;
+		}
 		level = glm::clamp(level, 0, 2);
 
 		static bool draw_sm = false;
@@ -308,9 +314,6 @@ void testbed_update(App& app)
 		}
 		else if (!draw_sm)
 		{
-			if (frameNumber == 0)
-				s_TerrainGen->resort_chunks({});
-
 			//float d = 0.0f;
 			//auto& occlusion = s_Framebuffer->m_ColorAttachments[7];
 			//occlusion->clear_to(&d);
