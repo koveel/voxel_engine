@@ -2,7 +2,6 @@
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-//layout(r32f, binding = 0) uniform readonly image2D u_BlitFrom;
 layout(binding = 0) uniform sampler2D u_BlitFrom;
 layout(r32f, binding = 1) uniform writeonly image2D u_BlitTo;
 

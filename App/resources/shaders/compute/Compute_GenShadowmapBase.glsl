@@ -5,7 +5,7 @@
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
 layout(binding = 0, r8ui) uniform writeonly uimage3D u_ShadowMap;
-layout(bindless_image, r8ui) uniform readonly uimage3D u_ChunkHandles[9];
+layout(binding = 1, bindless_sampler) uniform usampler3D u_ChunkHandles[9];
 
 uniform ivec3 u_ChunkDimensions;
 uniform vec3 u_CenterChunkPosition;
@@ -56,7 +56,8 @@ void main()
 			voxel_pos.z % u_ChunkDimensions.z
 		);
 	
-		uint voxel = imageLoad(u_ChunkHandles[chunk_index], local_voxel).r;
+		uint voxel = texelFetch(u_ChunkHandles[chunk_index], local_voxel, 0).r;
+		//uint voxel = imageLoad(u_ChunkHandles[chunk_index], local_voxel).r;
 		if (voxel != 0u) {
 			int	bit_index = x + (y << 1) + (z << 2);
 			packed_data |= (1u << bit_index);

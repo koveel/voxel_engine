@@ -175,33 +175,19 @@ void testbed_start(App& app)
 
 	s_TerrainGen = make_owning<TerrainGenerator>();
 
-	constexpr bool one_chunk_mofo = false;
-	if (one_chunk_mofo)
-		s_TerrainGen->generate_chunk({});
-	else {
-		Int2 chunks[] =
-		{
-			//{0, 2},
-			//{0, 1},
-			//{0, 0},
-			//{0,-1},
-					 
-			//{-1, 1}, {0, 1}, {1, 1},
-			//{-1, 0}, {0, 0}, {1, 0},
-			//{-1,-1}, {0,-1}, {1,-1},
+#define NUM_CHUNKS 128
 
-			{-2, 2},  {-1, 2}, {0, 2}, {1, 2},  {2, 2},
-			
-			{-2, 1},  {-1, 1}, {0, 1}, {1, 1},  {2, 1},
-			{-2, 0},  {-1, 0}, {0, 0}, {1, 0},  {2, 0},
-			{-2,-1},  {-1,-1}, {0,-1}, {1,-1},  {2,-1},
-			
-			{-2,-2},  {-1,-2}, {0,-2}, {1,-2},  {2,-2},
-		};
-
-		for (Int2 i : chunks)
-			s_TerrainGen->generate_chunk(i);
+#if NUM_CHUNKS == 1
+	s_TerrainGen->generate_chunk({});
+#else
+	int dim = glm::sqrt(NUM_CHUNKS);
+	for (int x = 0; x < dim; x++)
+	for (int y = 0; y < dim; y++)
+	{
+		Int2 idx = { x - dim / 2, y - dim / 2 };
+		s_TerrainGen->generate_chunk(idx);
 	}
+#endif
 	s_TerrainGen->generate_shadowmap({});
 
 	blueNoise = Texture2D::load("resources/textures/blue_noise_512.png");
@@ -292,6 +278,7 @@ void testbed_update(App& app)
 	if (Input::was_key_pressed(Key::R) && Input::is_key_down(Key::Control))
 	{
 		reload_all_shaders();
+		s_TerrainGen->m_TerrainShader = Shader::create("resources/shaders/TerrainShader.glsl");
 		s_TerrainGen->generate_shadowmap({});
 	}
 	handle_scene_view_ray_trace(cameraController.get_transform());
@@ -300,71 +287,49 @@ void testbed_update(App& app)
 	renderPipeline.submit_pass(rp_Geometry, [&]()
 	{
 		s_TerrainGen->m_ShadowMap->bind(1);
-
 		rp_Geometry.pShader->set("u_CameraPosition", cameraController.get_transform().Position);
 
 		static uint32_t tile = 4;
 		rp_Geometry.pShader->set("u_TextureTileFactor", tile);
 
+		static int32_t level = 0;
+		if (Input::was_key_pressed(Key::UpArrow))
+			level++;
+		if (Input::was_key_pressed(Key::DownArrow))
+			level--;
+		level = glm::clamp(level, 0, 2);
+
 		static bool draw_sm = false;
 		if (Input::was_key_pressed(Key::M))
 			draw_sm = !draw_sm;
-		if (draw_sm && VoxelMesh::s_MaterialPalette)
+		if (draw_sm)
 		{
-			static int32_t level = 0;
-			if (Input::was_key_pressed(Key::UpArrow))
-				level++;
-			if (Input::was_key_pressed(Key::DownArrow))
-				level--;
-
-			level = glm::clamp(level, 0, 2);
 			draw_shadow_map(level);
 		}
-		else
+		else if (!draw_sm)
 		{
-			/*
-			{-2, 2},  {-1, 2}, {0, 2}, {1, 2},  {2, 2},
+			if (frameNumber == 0)
+				s_TerrainGen->resort_chunks({});
 
-			{-2, 1},  {-1, 1}, {0, 1}, {1, 1},  {2, 1},
-			{-2, 0},  {-1, 0}, {0, 0}, {1, 0},  {2, 0},
-			{-2,-1},  {-1,-1}, {0,-1}, {1,-1},  {2,-1},
-
-			{-2,-2},  {-1,-2}, {0,-2}, {1,-2},  {2,-2},
-			*/
-
-			//for (auto& chunk : s_TerrainGen->m_ChunkTable)
-			//{
-			//	SceneRenderer::draw_mesh(chunk.second.mesh, chunk.second.position, {});
-			//}
-
-			//TerrainChunk* sorted_chunks[] =
-			//{
-			//	&s_TerrainGen->m_ChunkTable[{0, 0}],
-			//	&s_TerrainGen->m_ChunkTable[{0, 1}],
-			//	&s_TerrainGen->m_ChunkTable[{1, 1}],
-			//	&s_TerrainGen->m_ChunkTable[{1, 0}],
-			//	&s_TerrainGen->m_ChunkTable[{1,-1}],
-			//	&s_TerrainGen->m_ChunkTable[{0,-1}],
-			//	&s_TerrainGen->m_ChunkTable[{-1,-1}],
-			//	&s_TerrainGen->m_ChunkTable[{-1,0}],
-			//	&s_TerrainGen->m_ChunkTable[{-1,1}],
-			//};
-			//
 			//float d = 0.0f;
 			//auto& occlusion = s_Framebuffer->m_ColorAttachments[7];
-			//
-			//for (TerrainChunk* pchunk : sorted_chunks)
+			//occlusion->clear_to(&d);
+
+			s_TerrainGen->m_TerrainShader->set("u_MipLevel", level);
+			s_TerrainGen->render_terrain(projection * view, cameraController.get_transform().Position);
+
+			//for (TerrainChunk* chunk : s_TerrainGen->m_SortedChunks)
 			//{
 			//	occlusion->bind(2);
-			//	
+			//
+			//	SceneRenderer::draw_mesh(chunk->mesh, chunk->position, {});
+			//
 			//	Graphics::memory_barrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
 			//
 			//	Compute_BlitShader->bind();
-			//	//s_Framebuffer->m_ColorAttachments[5]->bind_as_image(0, TextureAccessMode::Read);
 			//	s_Framebuffer->m_DepthStencilAttachment->bind(0);
-			//	//s_Framebuffer->m_DepthStencilAttachment->bind_as_image(0, TextureAccessMode::Read);
 			//	occlusion->bind_as_image(1, TextureAccessMode::Write);
-			//	
+			//
 			//	uint32_t localSizeX = 16, localSizeY = 16;
 			//	Compute_BlitShader->dispatch(
 			//		(viewport.x + localSizeX - 1) / localSizeX,

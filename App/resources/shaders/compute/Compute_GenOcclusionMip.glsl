@@ -27,5 +27,5 @@ void main()
 			has_voxels = 1u;
 	}
 
-	imageStore(u_WriteMip, texel, uvec4(has_voxels == 0 ? 0 : 120));
+	imageStore(u_WriteMip, texel, uvec4(has_voxels == 0u ? 0 : texel.y * 2 + 1));
 }

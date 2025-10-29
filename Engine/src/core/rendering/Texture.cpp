@@ -121,35 +121,6 @@ namespace Engine {
 		return owning_ptr<Texture2D>(new Texture2D(width, height, format, mips));
 	}
 
-	TextureView::TextureView(const owning_ptr<Texture2D>& texture, TextureFormat format)
-		: m_InternalFormat(format)
-	{
-		glGenTextures(1, &m_ID);
-		glTextureView(m_ID, GL_TEXTURE_2D, texture->get_handle(), (uint32_t)m_InternalFormat, 0, 1, 0, 1);
-	}
-
-	void TextureView::bind(uint32_t slot) const
-	{
-		glBindTextureUnit(slot, m_ID);
-	}
-
-	// very useful -_-
-	static GLenum image_format_from_potential_depth_format(TextureFormat format)
-	{
-		switch (format)
-		{
-		case TextureFormat::Depth16: return (GLenum)TextureFormat::R16;
-		case TextureFormat::Depth32F: return (GLenum)TextureFormat::R32F;
-		default:
-			return (GLenum)format;
-		}
-	}
-
-	void TextureView::bind_as_image(uint32_t slot, TextureAccessMode mode) const
-	{
-		glBindImageTexture(slot, m_ID, 0, GL_FALSE, 0, (GLenum)mode, image_format_from_potential_depth_format(m_InternalFormat));
-	}
-
 	Texture3D::Texture3D(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
 		: m_Width(width), m_Height(height), m_Depth(depth), m_InternalFormat((GLenum)format)
 	{
@@ -191,10 +162,6 @@ namespace Engine {
 
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 		glTextureSubImage3D(m_ID, mip, x, y, z, m_Width, m_Height, m_Depth, m_DataFormat, dataType, data);
-
-		if (m_PixelData) delete[] m_PixelData;
-		m_PixelData = new uint8_t[m_Width * m_Height * m_Depth];
-		memcpy(m_PixelData, data, m_Width * m_Height * m_Depth);
 	}
 
 	void Texture3D::generate_mips()
@@ -218,24 +185,43 @@ namespace Engine {
 		return handle;
 	}
 
+	uint64_t Texture3D::get_bindless_texture_handle(uint32_t mip) const
+	{
+		uint64_t handle = glGetTextureHandleARB(m_ID);
+		return handle;
+	}
+
 	owning_ptr<Texture3D> Texture3D::create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
 	{
 		return owning_ptr<Texture3D>(new Texture3D(width, height, depth, format, mips));
 	}
 
-	BindlessTexture3D::BindlessTexture3D(const owning_ptr<Texture3D>& texture, uint32_t mip)
+	static constexpr uint32_t BindlessType_Image = 0, BindlessType_Texture = 1;
+
+	BindlessTexture3D Texture3D::get_bindless_image(uint32_t mip) const
 	{
-		m_Handle = texture->get_bindless_image_handle(mip);
+		return { get_bindless_image_handle(mip), BindlessType_Image };
+	}
+
+	BindlessTexture3D Texture3D::get_bindless_texture() const
+	{
+		return { get_bindless_texture_handle(), BindlessType_Texture };
 	}
 
 	void BindlessTexture3D::activate(TextureAccessMode mode)
 	{
-		glMakeImageHandleResidentARB(m_Handle, (GLenum)mode);
+		if (m_Type == BindlessType_Texture)
+			glMakeTextureHandleResidentARB(m_Handle);
+		else
+			glMakeImageHandleResidentARB(m_Handle, (GLenum)mode);
 	}
 
 	void BindlessTexture3D::deactivate()
 	{
-		glMakeImageHandleNonResidentARB(m_Handle);
+		if (m_Type == BindlessType_Texture)
+			glMakeTextureHandleNonResidentARB(m_Handle);
+		else
+			glMakeImageHandleNonResidentARB(m_Handle);
 	}
 	
 }

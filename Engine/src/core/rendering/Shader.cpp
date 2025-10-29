@@ -157,12 +157,6 @@ namespace Engine {
 		{
 			char current = source[i];
 
-			// append char
-			if (current != PreprocessorToken || source[i + 1] == 'v') { // need to not remove '#' in #version
-				result[currentShaderType] += current;
-				continue;
-			}
-
 			if (strncmp(&source[i], "#type ", 6) == 0)
 			{
 				const char* type = &source[i + 6];
@@ -175,8 +169,7 @@ namespace Engine {
 					i += 14;
 				}
 			}
-
-			if (strncmp(&source[i], "#include ", 9) == 0)
+			else if (strncmp(&source[i], "#include ", 9) == 0)
 			{
 				const char* file = &source[i + 10];
 				std::string fileName = std::string(std::string_view(file, find_nth_index_of_char(file, 0, '"')));
@@ -186,6 +179,10 @@ namespace Engine {
 				result[currentShaderType] += fileSource;
 
 				i += 10 + fileName.length();
+			}
+			else
+			{
+				result[currentShaderType] += current;
 			}
 		}
 

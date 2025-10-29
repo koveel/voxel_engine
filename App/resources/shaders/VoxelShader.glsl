@@ -83,7 +83,7 @@ vec2 ComputeFaceUV(vec3 local, vec3 normal)
 	return uv;
 }
 
-void RaymarchVoxelMesh(
+bool RaymarchVoxelMesh(
 	vec3 rayOrigin, vec3 rayDirection, vec3 obbCenter,
 	out int color, out vec3 normal, out float t, out ivec3 voxel, out vec2 uv
 )
@@ -103,21 +103,21 @@ void RaymarchVoxelMesh(
 	vec3 entryWorldspace = rayOrigin + rayDirection * hit;
 
 	// DEPTH EARLY EXIT
-	vec4 entryClip = u_ViewProjection * vec4(entryWorldspace, 1.0);
-	
-	float ndcZ = entryClip.z / entryClip.w;  // -1..1
-	float windowDepth = ndcZ * 0.5 + 0.5;
-	
-	ivec2 texel = ivec2(gl_FragCoord.xy);
-	// 1 = near, 0 = far
-	float cur_depth = texelFetch(u_DepthOcclusion, texel, 0).r;
-	
-	// if ray starts further away, occluded and can skip
-	if (windowDepth < cur_depth) {
-		discard;
-		o_Albedo = vec4(1.0f, 0.0f, 0.0f, 1.0f);
-		return false;
-	}
+	//vec4 entryClip = u_ViewProjection * vec4(entryWorldspace, 1.0);
+	//
+	//float ndcZ = entryClip.z / entryClip.w;  // -1..1
+	//float windowDepth = ndcZ * 0.5 + 0.5;
+	//
+	//ivec2 texel = ivec2(gl_FragCoord.xy);
+	//// 1 = near, 0 = far
+	//float cur_depth = texelFetch(u_DepthOcclusion, texel, 0).r;
+	//
+	//// if ray starts further away, occluded and can skip
+	//if (windowDepth < cur_depth) {
+	//	//o_Albedo = vec4(0.8f, 0.4f, 0.0f, 1.0f);
+	//	discard;
+	//	return true;
+	//}
 
 	ivec3 step = ivec3(sign(rayDirection));
 	vec3 invDirection = 1.0f / rayDirection;
@@ -158,7 +158,8 @@ void RaymarchVoxelMesh(
 				vec3 local = fract(gridPos / u_TextureTileFactor);
 				uv = ComputeFaceUV(local, normal);
 
-				return;
+				//return;
+				return false;
 			}
 
 			normal = vec3(0.0f);
@@ -171,41 +172,42 @@ void RaymarchVoxelMesh(
 			vec3 local = fract(gridPos / u_TextureTileFactor);
 			uv = ComputeFaceUV(local, normal);
 
-			return;
+			//return;
+			return false;
 		}
 
-		// DDA step - branchless axis selection
-		//bvec3 isMin = lessThan(tMax.xyz, tMax.yzx);
-		//isMin = isMin && lessThanEqual(tMax.xyz, tMax.zxy);
-		//
-		//pos += ivec3(isMin) * ivec3(step);
-		//tMax += vec3(isMin) * delta;
-		//axis = int(dot(vec3(isMin), vec3(0.0, 1.0, 2.0)));
+		// branchless step
+		bvec3 isMin = lessThan(tMax.xyz, tMax.yzx);
+		isMin = isMin && lessThanEqual(tMax.xyz, tMax.zxy);
+		
+		pos += ivec3(isMin) * ivec3(step);
+		tMax += vec3(isMin) * delta;
+		axis = int(dot(vec3(isMin), vec3(0.0, 1.0, 2.0)));
 
-		if (tMax.x < tMax.y) {
-			if (tMax.x < tMax.z) {
-				pos.x += step.x;
-				tMax.x += delta.x;
-				axis = 0;
-			}
-			else {
-				pos.z += step.z;
-				tMax.z += delta.z;
-				axis = 2;
-			}
-		}
-		else {
-			if (tMax.y < tMax.z) {
-				pos.y += step.y;
-				tMax.y += delta.y;
-				axis = 1;
-			}
-			else {
-				pos.z += step.z;
-				tMax.z += delta.z;
-				axis = 2;
-			}
-		}
+		//if (tMax.x < tMax.y) {
+		//	if (tMax.x < tMax.z) {
+		//		pos.x += step.x;
+		//		tMax.x += delta.x;
+		//		axis = 0;
+		//	}
+		//	else {
+		//		pos.z += step.z;
+		//		tMax.z += delta.z;
+		//		axis = 2;
+		//	}
+		//}
+		//else {
+		//	if (tMax.y < tMax.z) {
+		//		pos.y += step.y;
+		//		tMax.y += delta.y;
+		//		axis = 1;
+		//	}
+		//	else {
+		//		pos.z += step.z;
+		//		tMax.z += delta.z;
+		//		axis = 2;
+		//	}
+		//}
 
 		if (any(lessThan(pos, ivec3(0))) || any(greaterThanEqual(pos, mipDimensions)))
 			break;
@@ -252,7 +254,7 @@ void GetVoxelTangentBasis(vec3 normal, out vec3 T, out vec3 B)
 
 void main()
 {
-	vec3 cameraToPixel = normalize(u_CameraPosition - o_VertexWorldSpace);
+	vec3 cameraToPixel = normalize(o_VertexWorldSpace - u_CameraPosition);
 
 	// Make ray relative to object orientation
 	vec4 relativeCam = u_OBBOrientation * vec4(u_CameraPosition, 1.0f);
@@ -267,12 +269,16 @@ void main()
 	vec2 uv;
 	
 	// march
-	RaymarchVoxelMesh(relativeCam.xyz, -relativeViewDir.xyz, transformedObbCenter, colorIndex, normal, t, voxel, uv);
+	//bool culled = RaymarchVoxelMesh(relativeCam.xyz, -relativeViewDir.xyz, transformedObbCenter, colorIndex, normal, t, voxel, uv);
+	bool culled = RaymarchVoxelMesh(u_CameraPosition, cameraToPixel, transformedObbCenter, colorIndex, normal, t, voxel, uv);
 
 	// hitpoint / depth
-	vec3 hitpoint = u_CameraPosition - cameraToPixel * t;
+	vec3 hitpoint = u_CameraPosition + cameraToPixel * t;
 	float depth = LinearizeDepth(hitpoint);
 	gl_FragDepth = depth;	
+
+	if (culled)
+		return;
 
 	// normals
 	const float NormalMapStrength = 0.5f;

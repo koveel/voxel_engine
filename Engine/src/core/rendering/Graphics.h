@@ -81,6 +81,8 @@ namespace Engine {
 		static void memory_barrier(uint32_t target);
 
 		static void draw_cube();
+		static void draw_cubes_instanced(size_t count);
+
 		static void draw_sphere();
 		static void draw_quad();
 		static void draw_fullscreen_triangle(const owning_ptr<class Shader>& shader);

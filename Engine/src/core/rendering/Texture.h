@@ -45,6 +45,8 @@ namespace Engine {
 		ReadWrite = 0x88BA,
 	};
 
+	class BindlessTexture3D;
+
 	class Texture2D
 	{
 	private:
@@ -78,20 +80,6 @@ namespace Engine {
 		uint32_t m_DataFormat;
 	};
 
-	class TextureView
-	{
-	public:
-		TextureView() = default;
-		TextureView(const owning_ptr<Texture2D>& texture, TextureFormat format);
-
-		void bind(uint32_t slot = 0) const;
-		void bind_as_image(uint32_t slot, TextureAccessMode mode) const;
-		uint32_t get_handle() const { return m_ID; }
-	private:
-		uint32_t m_ID = 0;
-		TextureFormat m_InternalFormat;
-	};
-
 	class Texture3D
 	{
 	private:
@@ -116,12 +104,12 @@ namespace Engine {
 		uint32_t get_handle() const { return m_ID; }
 
 		static owning_ptr<Texture3D> create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips = 1);
-
-		uint8_t* m_PixelData = nullptr; // move
+	public:
+		BindlessTexture3D get_bindless_image(uint32_t mip) const;
+		BindlessTexture3D get_bindless_texture() const;
 	private:
 		uint64_t get_bindless_image_handle(uint32_t mip = 0) const;
-
-		friend class BindlessTexture3D;
+		uint64_t get_bindless_texture_handle(uint32_t mip = 0) const;
 	private:
 		uint32_t m_ID = 0;
 		uint32_t m_Width = 0, m_Height = 0, m_Depth = 0;
@@ -131,16 +119,21 @@ namespace Engine {
 
 	class BindlessTexture3D
 	{
+	private:
+		BindlessTexture3D(uint64_t handle, uint32_t type)
+			: m_Handle(handle), m_Type(type)
+		{}
 	public:
 		BindlessTexture3D() = default;
-		BindlessTexture3D(const owning_ptr<Texture3D>& texture, uint32_t mip = 0);
 
-		void activate(TextureAccessMode mode);
+		void activate(TextureAccessMode mode = (TextureAccessMode)0);
 		void deactivate();
 
 		uint64_t get_handle() const { return m_Handle; }
 	private:
+		uint32_t m_Type = 0; // 0 = image, 1 = texture
 		uint64_t m_Handle = 0;
+		friend class Texture3D;
 	};
 
 }

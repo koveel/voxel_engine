@@ -321,6 +321,12 @@ namespace Engine {
 		draw_indexed(36);
 	}
 
+	void Graphics::draw_cubes_instanced(size_t count)
+	{
+		s_CubeVAO->bind();
+		glDrawElementsInstanced((GLenum)s_PrimitiveDrawMode, 36, GL_UNSIGNED_INT, nullptr, count);
+	}
+
 	void Graphics::draw_sphere()
 	{
 		s_SphereVAO->bind();
