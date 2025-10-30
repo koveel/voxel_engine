@@ -57,7 +57,6 @@ void main()
 		);
 	
 		uint voxel = texelFetch(u_ChunkHandles[chunk_index], local_voxel, 0).r;
-		//uint voxel = imageLoad(u_ChunkHandles[chunk_index], local_voxel).r;
 		if (voxel != 0u) {
 			int	bit_index = x + (y << 1) + (z << 2);
 			packed_data |= (1u << bit_index);

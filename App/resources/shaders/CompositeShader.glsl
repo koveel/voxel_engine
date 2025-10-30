@@ -18,7 +18,6 @@ layout(binding = 1) uniform sampler2D u_Normals;
 layout(binding = 2) uniform sampler2D u_ComputeAO;
 layout(binding = 3) uniform sampler2D u_Lighting;
 layout(binding = 4) uniform sampler2D u_Depth;
-layout(binding = 5) uniform sampler2D u_DepthOcclusion;
 
 uniform vec2 u_ViewportDims;
 
@@ -68,11 +67,9 @@ void main()
 	float ao = texture(u_ComputeAO, uv).r;
 	vec3 normal = texture(u_Normals, uv).xyz;
 	vec4 lighting = texture(u_Lighting, uv);
-
-	float d = texture(u_DepthOcclusion, uv).r;
+	float depth = texture(u_Depth, uv).r;
 
 	const float ambient_contribution = 0.5f;
-
 	vec3 worldSpaceFragment = ReconstructWorldSpaceFromDepth(uv);
 	float ao_dist_fade = GetAOFadeFromPixelPosition(worldSpaceFragment);
 
@@ -85,6 +82,6 @@ void main()
 	case 1: o_Color = vec4(ao, 0.0f, 0.0f, 1.0f); break;
 	case 2: o_Color = vec4(worldSpaceFragment, 1.0f); break;
 	case 3: o_Color = vec4(normal, 1.0f); break;
-	case 4: o_Color = vec4(d, 0.0f, 0.0f, 1.0f); break;
+	case 4: o_Color = vec4(depth, 0.0f, 0.0f, 1.0f); break;
 	}
 }

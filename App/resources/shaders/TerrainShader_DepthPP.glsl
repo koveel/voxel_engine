@@ -14,7 +14,6 @@ struct ChunkInstance
 {
 	mat4 transformation;
 	uint64_t voxel_texture_handle;
-	ivec2 index;
 	int lod;
 };
 
@@ -40,22 +39,15 @@ void main()
 #extension GL_ARB_bindless_texture : require
 #extension GL_ARB_gpu_shader_int64 : enable
 
-layout(location = 0) out vec4 o_Albedo;
-layout(location = 1) out vec3 o_Normal;
+//layout(location = 7) out float o_Depth;
 
 in vec3 v_VertexWorldSpace;
 in flat int v_Instance;
-
-//layout(binding = 0) uniform usampler3D u_ShadowMap;
-layout(binding = 0) uniform usampler3D u_PackedOcclusionMap;
-
-layout(binding = 3) uniform sampler2D u_MaterialPalette;
 
 struct ChunkInstance
 {
 	mat4 transformation;
 	uint64_t voxel_texture_handle;
-	ivec2 index;
 	int lod;
 };
 
@@ -66,8 +58,6 @@ layout(std430, binding = 0) readonly buffer InstanceData
 
 uniform mat4 u_ViewProjection;
 uniform vec3 u_CameraPosition;
-uniform vec2 u_ViewportDims;
-uniform ivec3 u_ChunkDimensions;
 
 float RayAABB_fast(vec3 ro, vec3 invrd, vec3 p0, vec3 p1)
 {
@@ -82,26 +72,20 @@ float RayAABB_fast(vec3 ro, vec3 invrd, vec3 p0, vec3 p1)
 	return max(tEnter, 0.0f);
 }
 
-bool Approx(float a, float b)
-{
-	const float epsilon = 0.00001f;
-	return abs(a - b) < epsilon;
-}
-
-void RaymarchVoxelMesh(
+bool RaymarchVoxelMesh(
 	vec3 rayOrigin, vec3 rayDirection, vec3 obbCenter,
-	usampler3D voxel_texture, int mip, ivec2 chunk_index,
+	usampler3D voxel_texture,
 	out int color, out vec3 normal, out float t, out ivec3 voxel
 )
 {
-	const float BaseVoxelScale = 0.1f;
+	const int MipLevel = 2;
 
-	mip = 0;
-	float voxelScale = BaseVoxelScale * exp2(mip);
+	const float BaseVoxelScale = 0.1f;
+	float voxelScale = BaseVoxelScale * exp2(MipLevel);
 
 	// Bounding box
-	ivec3 mipDimensions = textureSize(voxel_texture, mip);
-	vec3 worldspaceExtents = (vec3(mipDimensions) * voxelScale) * 0.5f;
+	ivec3 MipLevelDimensions = textureSize(voxel_texture, MipLevel);
+	vec3 worldspaceExtents = (vec3(MipLevelDimensions) * voxelScale) * 0.5f;
 	vec3 p0 = obbCenter - worldspaceExtents;
 	vec3 p1 = obbCenter + worldspaceExtents;
 
@@ -110,73 +94,28 @@ void RaymarchVoxelMesh(
 
 	float hit = RayAABB_fast(rayOrigin, invDirection, p0, p1);
 
-	vec3 voxelsPerUnit = mipDimensions / (p1 - p0);
+	vec3 voxelsPerUnit = MipLevelDimensions / (p1 - p0);
 	vec3 entry = ((rayOrigin + rayDirection * hit) - p0) * voxelsPerUnit;
 	vec3 entryWorldspace = rayOrigin + rayDirection * hit;	
 
 	vec3 delta = abs(invDirection);
-	ivec3 pos = ivec3(clamp(floor(entry), vec3(0.0f), vec3(mipDimensions - 1)));
+	ivec3 pos = ivec3(clamp(floor(entry), vec3(0.0f), vec3(MipLevelDimensions - 1)));
 	vec3 tMax = (vec3(pos) - entry + max(vec3(step), 0.0)) / rayDirection;
 
 	int axis = 0;
-	int maxSteps = mipDimensions.x + mipDimensions.y + mipDimensions.z;
-
-	// cached packed voxel data
-	ivec3 base = ivec3(-1);
-	uint packed_block = 0u;
+	int maxSteps = MipLevelDimensions.x + MipLevelDimensions.y + MipLevelDimensions.z;
 
 	for (int i = 0; i < maxSteps; i++)
 	{
-		const int halfGridSize = 1;
-		ivec3 chunkVoxelOffset = ivec3
-		(
-			(chunk_index.x + halfGridSize) * u_ChunkDimensions.x,
-			0,
-			(chunk_index.y + halfGridSize) * u_ChunkDimensions.z
-		);
-
-		ivec3 occlusionRelPos = pos + chunkVoxelOffset;
-		ivec3 new_base = occlusionRelPos >> 1; // packed block
-		ivec3 local_pos = occlusionRelPos & 1; // voxel within packed block
-		if (any(notEqual(new_base, base)))
+		uint col = texelFetch(voxel_texture, pos, MipLevel).r;
+		if (col != 0)
 		{
-			// entered new block, fetch packed
-			packed_block = texelFetch(u_PackedOcclusionMap, new_base, 0).r;
-			base = new_base;
-		}
-
-		uint bit_index = local_pos.x + (local_pos.y << 1) + (local_pos.z << 2);
-		bool hit_solid = ((packed_block >> bit_index) & 1u) != 0u;
-		if (hit_solid)
-		{
-			uint col = texelFetch(voxel_texture, pos, mip).r;
 			color = int(col);
 			voxel = pos;
 
-			// edge voxel?
-			if (i == 0)
-			{
-				t = hit;
-				// Determine normal
-				for (int a = 0; a < 3; a++)
-				{
-					float v = entryWorldspace[a];
-					if (Approx(v, p0[a]) || Approx(v, p1[a]))
-					{
-						normal = vec3(0.0f);
-						normal[a] = -step[a];
-						break;
-					}
-				}
-			}
-			else
-			{
-				normal = vec3(0.0f);
-				normal[axis] = -float(step[axis]);
-				t = hit + (tMax[axis] - delta[axis]) / voxelsPerUnit[axis];
-			}
-
-			return;
+			bool edgeVoxel = i != 0;
+			t = mix(hit, hit + (tMax[axis] - delta[axis]) / voxelsPerUnit[axis], float(edgeVoxel));
+			return true;
 		}
 
 		// branchless step
@@ -187,11 +126,11 @@ void RaymarchVoxelMesh(
 		tMax += vec3(isMin) * delta;
 		axis = int(dot(vec3(isMin), vec3(0.0, 1.0, 2.0)));
 
-		if (any(lessThan(pos, ivec3(0))) || any(greaterThanEqual(pos, mipDimensions)))
+		if (any(lessThan(pos, ivec3(0))) || any(greaterThanEqual(pos, MipLevelDimensions)))
 			break;
 	}
 
-	discard;
+	return false;
 }
 
 float LinearizeDepth(vec3 p)
@@ -212,23 +151,17 @@ void main()
 
 	// march
 	ChunkInstance chunk_instance = chunks[v_Instance];
-
 	usampler3D voxel_texture = usampler3D(chunk_instance.voxel_texture_handle);
-	ivec2 chunk_index = chunk_instance.index;
 	vec3 chunk_center = vec3(chunk_instance.transformation[3]);
-	int mip = chunk_instance.lod;
 
-	RaymarchVoxelMesh(u_CameraPosition, cameraToPixel, chunk_center, voxel_texture, mip, chunk_index, colorIndex, normal, t, voxel);
+	bool hit = RaymarchVoxelMesh(u_CameraPosition, cameraToPixel, chunk_center, voxel_texture, colorIndex, normal, t, voxel);
 
 	// hitpoint / depth
 	vec3 hitpoint = u_CameraPosition + cameraToPixel * t;
 	float depth = LinearizeDepth(hitpoint);
-	gl_FragDepth = depth;
 
-	// normals
-	o_Normal = normal;
-
-	int materialIndex = 1;
-	vec4 albedo = texelFetch(u_MaterialPalette, ivec2(colorIndex, materialIndex), 0);
-	o_Albedo = albedo;
+	if (hit)
+		gl_FragDepth = depth;
+	else
+		discard;
 }

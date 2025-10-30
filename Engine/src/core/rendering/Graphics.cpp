@@ -6,9 +6,7 @@
 #include "Shader.h"
 #include "VertexArray.h"
 
-#include "gui/Font.h"
-
-#include "gui/MSDFData.h"
+#include "Extensions.h"
 
 namespace Engine {
 
@@ -191,6 +189,8 @@ namespace Engine {
 
 		glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, false);
 #endif
+		ExtensionsQuery extensions = graphics_query_gl_extension_support();
+
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 

@@ -83,7 +83,7 @@ namespace Engine {
 	class Texture3D
 	{
 	private:
-		Texture3D(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips = 1);
+		Texture3D(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips = 1, bool sparse = false);
 	public:
 		~Texture3D();
 
@@ -104,6 +104,7 @@ namespace Engine {
 		uint32_t get_handle() const { return m_ID; }
 
 		static owning_ptr<Texture3D> create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips = 1);
+		static owning_ptr<Texture3D> create_sparse(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips = 1);
 	public:
 		BindlessTexture3D get_bindless_image(uint32_t mip) const;
 		BindlessTexture3D get_bindless_texture() const;
@@ -113,6 +114,7 @@ namespace Engine {
 	private:
 		uint32_t m_ID = 0;
 		uint32_t m_Width = 0, m_Height = 0, m_Depth = 0;
+		bool m_Sparse = false;
 
 		uint32_t m_InternalFormat, m_DataFormat;
 	};

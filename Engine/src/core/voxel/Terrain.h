@@ -40,6 +40,7 @@ namespace Engine {
 		void fill_instance_data(struct ChunkInstanceData* data, TerrainChunk& from, Int2 world_origin);
 	public:
 		owning_ptr<Shader> m_TerrainShader;
+		owning_ptr<Shader> m_TerrainShader_DepthPP;
 		owning_ptr<ComputeShader> m_ChunkGenerationShader;
 
 		owning_ptr<ComputeShader> m_ShadowMapBaseMipGenerationShader;

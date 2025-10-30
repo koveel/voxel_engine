@@ -185,7 +185,9 @@ namespace Engine {
 				}*/;
 				debug_heightmap_palette[0] = 0;
 				for (size_t i = 1; i < TerrainChunk::Height; i++)
+				{
 					debug_heightmap_palette[i] = encode_rgba(Color(i, i, i, 10000.0f) / TerrainChunk::Height);
+				}
 
 				s_MaterialPalette->set_data(debug_heightmap_palette, 0, 1, 256, 1);
 			}

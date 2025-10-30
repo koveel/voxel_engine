@@ -110,8 +110,8 @@ static void reload_all_shaders()
 
 static void init_renderpass()
 {
-	rp_Geometry.pShader = SceneRenderer::s_VoxelMeshShader.get();
 	rp_Geometry.Depth.Write = true;
+	rp_Geometry.Depth.Test = DepthTest::GreaterEq;
 
 	rp_Stencil.pShader = Shader_NoFragment.get();
 	rp_Stencil.CullFace = Face::None;
@@ -175,7 +175,7 @@ void testbed_start(App& app)
 
 	s_TerrainGen = make_owning<TerrainGenerator>();
 	 
-#define NUM_CHUNKS 25
+#define NUM_CHUNKS 9
 
 #if NUM_CHUNKS == 1
 	s_TerrainGen->generate_chunk({});
@@ -269,6 +269,11 @@ void testbed_update(App& app)
 
 	Matrix4 view = cameraController.get_view();
 	Matrix4 projection = camera.get_projection();
+	Matrix4 viewProjection = projection * view;
+
+	// SSBO ORDER DETERMINES INSTANCE DRAW ORDER
+	// DEPTH CULLING BASICALLY ALREADY HAPPENS WTF WAS DAT FOR
+	// FOCUS ON REDUCING RAYS, STEP COUNT, TEXTURE BANDWIDTH
 
 	renderPipeline.begin(view, projection);
 	s_Framebuffer->bind();
@@ -284,15 +289,11 @@ void testbed_update(App& app)
 	}
 	handle_scene_view_ray_trace(cameraController.get_transform());
 
+	Float3 cameraPosition = cameraController.get_transform().Position;
+
 	// GEOMETRY PASS
 	renderPipeline.submit_pass(rp_Geometry, [&]()
 	{
-		s_TerrainGen->m_ShadowMap->bind(1);
-		rp_Geometry.pShader->set("u_CameraPosition", cameraController.get_transform().Position);
-
-		static uint32_t tile = 4;
-		rp_Geometry.pShader->set("u_TextureTileFactor", tile);
-
 		static int32_t level = 2;
 		if (Input::was_key_pressed(Key::UpArrow))
 		{
@@ -305,42 +306,8 @@ void testbed_update(App& app)
 		}
 		level = glm::clamp(level, 0, 2);
 
-		static bool draw_sm = false;
-		if (Input::was_key_pressed(Key::M))
-			draw_sm = !draw_sm;
-		if (draw_sm)
-		{
-			draw_shadow_map(level);
-		}
-		else if (!draw_sm)
-		{
-			//float d = 0.0f;
-			//auto& occlusion = s_Framebuffer->m_ColorAttachments[7];
-			//occlusion->clear_to(&d);
-
-			s_TerrainGen->m_TerrainShader->set("u_MipLevel", level);
-			s_TerrainGen->render_terrain(projection * view, cameraController.get_transform().Position);
-
-			//for (TerrainChunk* chunk : s_TerrainGen->m_SortedChunks)
-			//{
-			//	occlusion->bind(2);
-			//
-			//	SceneRenderer::draw_mesh(chunk->mesh, chunk->position, {});
-			//
-			//	Graphics::memory_barrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
-			//
-			//	Compute_BlitShader->bind();
-			//	s_Framebuffer->m_DepthStencilAttachment->bind(0);
-			//	occlusion->bind_as_image(1, TextureAccessMode::Write);
-			//
-			//	uint32_t localSizeX = 16, localSizeY = 16;
-			//	Compute_BlitShader->dispatch(
-			//		(viewport.x + localSizeX - 1) / localSizeX,
-			//		(viewport.y + localSizeY - 1) / localSizeY
-			//	);
-			//	Graphics::memory_barrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-			//}
-		}
+		s_TerrainGen->m_TerrainShader->set("u_MipLevel", level);
+		s_TerrainGen->render_terrain(viewProjection, cameraPosition);
 	});
 
 	static Float3 lightPos = { -3.0f, 5.0f, 2.0f };
@@ -433,7 +400,7 @@ void testbed_update(App& app)
 		ComputeAOShader->set("u_InverseView", glm::inverse(view));
 		ComputeAOShader->set("u_InverseProjection", glm::inverse(projection));
 		ComputeAOShader->set("u_PrevFrameViewProjection", s_PreviousViewProjection);
-		ComputeAOShader->set("u_ViewProjection", projection * view);
+		ComputeAOShader->set("u_ViewProjection", viewProjection);
 		ComputeAOShader->set("u_FrameNumber", frameNumber);
 
 		ComputeAOShader->set("u_CameraPos", cameraController.m_Transformation.Position);
@@ -545,6 +512,8 @@ void testbed_update(App& app)
 	{
 		// debug text
 		TextShader->bind();
+		TextShader->set("u_ViewportDims", viewport);
+		s_Framebuffer->m_ColorAttachments[0]->bind(1);
 		TextShader->set("u_ViewProjection", pixelProjection);
 		{
 			TextShader->set("u_Transformation",

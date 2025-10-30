@@ -20,9 +20,12 @@ void main()
 
 layout(location = 0) out vec4 color;
 
+layout(binding = 0) uniform sampler2D u_FontAtlas;
+layout(binding = 1) uniform sampler2D u_Albedo;
+
 in vec2 o_UV;
 
-uniform sampler2D u_FontAtlas;
+uniform vec2 u_ViewportDims;
 
 float median(vec3 v)
 {
@@ -53,7 +56,10 @@ uniform vec2 u_ShadowOffset;
 void main()
 {
 	const vec4 backgroundColor = vec4(0.0f);
-	const vec4 textColor = vec4(1.0f);
+
+	vec2 uv = gl_FragCoord.xy / u_ViewportDims;
+	vec3 screenColor = texture(u_Albedo, uv).rgb;
+	vec4 textColor = vec4(1.0f - screenColor, 1.0f);
 
 	float baseOpacity = SampleFontAtlas(o_UV);
 	float shadowOpacity = SampleFontAtlas(o_UV + u_ShadowOffset);

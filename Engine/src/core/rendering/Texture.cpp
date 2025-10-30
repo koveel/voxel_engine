@@ -121,12 +121,14 @@ namespace Engine {
 		return owning_ptr<Texture2D>(new Texture2D(width, height, format, mips));
 	}
 
-	Texture3D::Texture3D(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
+	Texture3D::Texture3D(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips, bool sparse)
 		: m_Width(width), m_Height(height), m_Depth(depth), m_InternalFormat((GLenum)format)
 	{
 		m_DataFormat = gl_data_format_from_internal_format(format);
 
 		glCreateTextures(GL_TEXTURE_3D, 1, &m_ID);
+		glTextureParameteri(m_ID, GL_TEXTURE_SPARSE_ARB, sparse);
+
 		glTextureStorage3D(m_ID, mips, (GLenum)format, m_Width, m_Height, m_Depth);
 	}
 
@@ -194,6 +196,11 @@ namespace Engine {
 	owning_ptr<Texture3D> Texture3D::create(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
 	{
 		return owning_ptr<Texture3D>(new Texture3D(width, height, depth, format, mips));
+	}
+
+	owning_ptr<Texture3D> Texture3D::create_sparse(uint32_t width, uint32_t height, uint32_t depth, TextureFormat format, uint32_t mips)
+	{
+		return owning_ptr<Texture3D>(new Texture3D(width, height, depth, format, mips, true));
 	}
 
 	static constexpr uint32_t BindlessType_Image = 0, BindlessType_Texture = 1;

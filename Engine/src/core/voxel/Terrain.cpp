@@ -21,12 +21,14 @@ namespace Engine {
 	{
 		Matrix4 transformation;
 		uint64_t voxel_texture;
+		Int2 index;
 		uint32_t lod;
 	};
 
 	TerrainGenerator::TerrainGenerator()
 	{
 		m_TerrainShader = Shader::create("resources/shaders/TerrainShader.glsl");
+		m_TerrainShader_DepthPP = Shader::create("resources/shaders/TerrainShader_DepthPP.glsl");
 		m_ChunkGenerationShader = ComputeShader::create("resources/shaders/compute/Compute_GenerateTerrain.glsl");
 
 		m_TextureOcclusionMipGenerationShader = ComputeShader::create("resources/shaders/compute/Compute_GenOcclusionMip.glsl");
@@ -114,6 +116,7 @@ namespace Engine {
 	{
 		data->transformation = Transformation(from.position, {}, Float3(from.mesh.m_Texture->get_dimensions()) * 0.1f).get_transform();
 		data->voxel_texture = from.bindless_texture.get_handle();
+		data->index = from.index;
 
 		uint32_t lod = determine_lod_from_chunk_indices(from.index, world_origin);
 		if ((from.generated_lods & lod) == 0)
@@ -232,10 +235,11 @@ namespace Engine {
 	{
 		m_TerrainShader->bind();
 		m_ChunkSSBO->bind(0);
-		m_ShadowMap->bind(1);
+		m_ShadowMap->bind(0);
 
 		m_TerrainShader->set("u_MaterialIndex", 1);
 		//m_TerrainShader->set("u_MipLevel", 0);
+		m_TerrainShader->set("u_ChunkDimensions", Int3(TerrainChunk::Width, TerrainChunk::Height, TerrainChunk::Width));
 
 		m_TerrainShader->set("u_CameraPosition", camera);
 		m_TerrainShader->set("u_ViewProjection", viewProj);
